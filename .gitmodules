@@ -38,3 +38,8 @@
 	url = https://github.com/nanvix/srsly.git
 	branch = nanvix/v2.5.1
 	shallow = true
+[submodule "deps/et_xmlfile"]
+	path = deps/et_xmlfile
+	url = https://github.com/nanvix/et_xmlfile.git
+	branch = nanvix/v2.0.0
+	shallow = true

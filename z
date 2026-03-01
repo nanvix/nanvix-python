@@ -93,6 +93,7 @@ cmd_setup() {
   git config --global --add safe.directory "$ROOT_DIR/deps/murmurhash"
   git config --global --add safe.directory "$ROOT_DIR/deps/preshed"
   git config --global --add safe.directory "$ROOT_DIR/deps/srsly"
+  git config --global --add safe.directory "$ROOT_DIR/deps/et_xmlfile"
 
   # Init/update git submodules
   log "initializing submodules"
@@ -100,7 +101,7 @@ cmd_setup() {
 
   # Exclude build artifacts from submodule dirty tracking
   log "configuring submodule excludes"
-  local cpython_gitdir cymem_gitdir numpy_gitdir kiwi_gitdir libexpat_gitdir murmurhash_gitdir preshed_gitdir srsly_gitdir
+  local cpython_gitdir cymem_gitdir numpy_gitdir kiwi_gitdir libexpat_gitdir murmurhash_gitdir preshed_gitdir srsly_gitdir et_xmlfile_gitdir
   cpython_gitdir="$(git -C "$ROOT_DIR/deps/cpython" rev-parse --git-dir)"
   cymem_gitdir="$(git -C "$ROOT_DIR/deps/cymem" rev-parse --git-dir)"
   numpy_gitdir="$(git -C "$ROOT_DIR/deps/numpy" rev-parse --git-dir)"
@@ -109,6 +110,7 @@ cmd_setup() {
   murmurhash_gitdir="$(git -C "$ROOT_DIR/deps/murmurhash" rev-parse --git-dir)"
   preshed_gitdir="$(git -C "$ROOT_DIR/deps/preshed" rev-parse --git-dir)"
   srsly_gitdir="$(git -C "$ROOT_DIR/deps/srsly" rev-parse --git-dir)"
+  et_xmlfile_gitdir="$(git -C "$ROOT_DIR/deps/et_xmlfile" rev-parse --git-dir)"
   grep -qxF 'Modules/cymem_builtin.c' "$cpython_gitdir/info/exclude" 2>/dev/null \
     || echo 'Modules/cymem_builtin.c' >> "$cpython_gitdir/info/exclude"
   grep -qxF 'Modules/kiwi_builtin.c' "$cpython_gitdir/info/exclude" 2>/dev/null \
@@ -253,6 +255,7 @@ cmd_build() {
   [[ -d "$ROOT_DIR/deps/murmurhash/murmurhash" ]] || die "murmurhash submodule not initialized. Run './z setup' first."
   [[ -d "$ROOT_DIR/deps/preshed/preshed" ]] || die "preshed submodule not initialized. Run './z setup' first."
   [[ -d "$ROOT_DIR/deps/srsly/srsly" ]] || die "srsly submodule not initialized. Run './z setup' first."
+  [[ -d "$ROOT_DIR/deps/et_xmlfile/et_xmlfile" ]] || die "et_xmlfile submodule not initialized. Run './z setup' first."
   [[ -d "$ROOT_DIR/deps/libexpat/expat" ]] || die "libexpat submodule not initialized. Run './z setup' first."
 
   # Activate the build virtual environment created by setup (provides Cython)
@@ -267,6 +270,7 @@ cmd_build() {
   local murmurhash_dir="$ROOT_DIR/deps/murmurhash"
   local preshed_dir="$ROOT_DIR/deps/preshed"
   local srsly_dir="$ROOT_DIR/deps/srsly"
+  local et_xmlfile_dir="$ROOT_DIR/deps/et_xmlfile"
   local libexpat_dir="$ROOT_DIR/deps/libexpat"
 
   # Step 1: Configure CPython (generates pyconfig.h and Makefile)
@@ -442,6 +446,13 @@ SETUP
   cp -a "$srsly_dir/srsly" "$srsly_pkg"
   cp "$ROOT_DIR/patches/srsly_ujson_shim.py" "$srsly_pkg/ujson/ujson.py"
   find "$srsly_pkg" \( -name '*.pyx' -o -name '*.pxd' -o -name '*.c' -o -name '*.cpp' -o -name '*.h' \) -delete 2>/dev/null || true
+
+  # Step 8f: Install et_xmlfile Python package from submodule
+  log "installing et_xmlfile Python package"
+  local et_xmlfile_pkg="$SYSROOT/lib/python3.12/site-packages/et_xmlfile"
+  rm -rf "$et_xmlfile_pkg"
+  cp -a "$et_xmlfile_dir/et_xmlfile" "$et_xmlfile_pkg"
+  rm -rf "$et_xmlfile_pkg/__pycache__"
 
   # Step 9: Install numpy Python package plus Nanvix import bootstrap
   log "installing numpy Python package"
