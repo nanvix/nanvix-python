@@ -38,3 +38,8 @@
 	url = https://github.com/nanvix/srsly.git
 	branch = nanvix/v2.5.1
 	shallow = true
+[submodule "deps/openpyxl"]
+	path = deps/openpyxl
+	url = https://github.com/nanvix/openpyxl.git
+	branch = nanvix/v3.1.2
+	shallow = true

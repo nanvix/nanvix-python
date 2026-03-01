@@ -93,6 +93,7 @@ cmd_setup() {
   git config --global --add safe.directory "$ROOT_DIR/deps/murmurhash"
   git config --global --add safe.directory "$ROOT_DIR/deps/preshed"
   git config --global --add safe.directory "$ROOT_DIR/deps/srsly"
+  git config --global --add safe.directory "$ROOT_DIR/deps/openpyxl"
 
   # Init/update git submodules
   log "initializing submodules"
@@ -253,6 +254,7 @@ cmd_build() {
   [[ -d "$ROOT_DIR/deps/murmurhash/murmurhash" ]] || die "murmurhash submodule not initialized. Run './z setup' first."
   [[ -d "$ROOT_DIR/deps/preshed/preshed" ]] || die "preshed submodule not initialized. Run './z setup' first."
   [[ -d "$ROOT_DIR/deps/srsly/srsly" ]] || die "srsly submodule not initialized. Run './z setup' first."
+  [[ -d "$ROOT_DIR/deps/openpyxl/openpyxl" ]] || die "openpyxl submodule not initialized. Run './z setup' first."
   [[ -d "$ROOT_DIR/deps/libexpat/expat" ]] || die "libexpat submodule not initialized. Run './z setup' first."
 
   # Activate the build virtual environment created by setup (provides Cython)
@@ -267,6 +269,7 @@ cmd_build() {
   local murmurhash_dir="$ROOT_DIR/deps/murmurhash"
   local preshed_dir="$ROOT_DIR/deps/preshed"
   local srsly_dir="$ROOT_DIR/deps/srsly"
+  local openpyxl_dir="$ROOT_DIR/deps/openpyxl"
   local libexpat_dir="$ROOT_DIR/deps/libexpat"
 
   # Step 1: Configure CPython (generates pyconfig.h and Makefile)
@@ -442,6 +445,13 @@ SETUP
   cp -a "$srsly_dir/srsly" "$srsly_pkg"
   cp "$ROOT_DIR/patches/srsly_ujson_shim.py" "$srsly_pkg/ujson/ujson.py"
   find "$srsly_pkg" \( -name '*.pyx' -o -name '*.pxd' -o -name '*.c' -o -name '*.cpp' -o -name '*.h' \) -delete 2>/dev/null || true
+
+  # Step 8f: Install openpyxl Python package from submodule
+  log "installing openpyxl Python package"
+  local openpyxl_pkg="$SYSROOT/lib/python3.12/site-packages/openpyxl"
+  rm -rf "$openpyxl_pkg"
+  cp -a "$openpyxl_dir/openpyxl" "$openpyxl_pkg"
+  find "$openpyxl_pkg" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
 
   # Step 9: Install numpy Python package plus Nanvix import bootstrap
   log "installing numpy Python package"
