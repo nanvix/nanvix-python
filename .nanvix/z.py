@@ -129,8 +129,9 @@ class NanvixPythonBuild(ZScript):
         *,
         timeout: int | None = None,
     ) -> None:
-        """Run a Python script under nanvixd.elf.
+        """Run a Python script under nanvixd.
 
+        Uses nanvixd.exe on Windows, nanvixd.elf on Linux.
         Captures output to *log_file*.  Does NOT raise on non-zero exit
         (the caller inspects the log for PASS/FAIL).
         """
@@ -138,41 +139,46 @@ class NanvixPythonBuild(ZScript):
             timeout = int(os.environ.get("TIMEOUT_SECONDS", str(_DEFAULT_TIMEOUT)))
 
         deployment = self.config.deployment_mode
+        is_windows = sys.platform == "win32"
+        nanvixd_name = "nanvixd.exe" if is_windows else "nanvixd.elf"
+        nanvixd = str((sysroot / "bin" / nanvixd_name).resolve())
 
         cmd: list[str]
         if deployment == "standalone":
             ramfs_img = self._ensure_ramfs(sysroot)
-            cmd = [
-                "timeout",
-                "--foreground",
-                str(timeout),
-                str(sysroot / "bin" / "nanvixd.elf"),
+            nanvixd_args = [
+                nanvixd,
                 "-bin-dir",
-                str(sysroot / "bin"),
+                str((sysroot / "bin").resolve()),
                 "-ramfs",
                 str(ramfs_img),
                 "--",
-                str(sysroot / "bin" / "python3.12"),
+                str((sysroot / "bin" / "python3.12").resolve()),
                 f"-B /sysroot/{script_path};PYTHONHOME=/sysroot PYTHONDONTWRITEBYTECODE=1",
             ]
         else:
-            cmd = [
-                "timeout",
-                "--foreground",
-                str(timeout),
-                str(sysroot / "bin" / "nanvixd.elf"),
+            nanvixd_args = [
+                nanvixd,
                 "--",
-                str(sysroot / "bin" / "python3.12"),
+                str((sysroot / "bin" / "python3.12").resolve()),
                 f"./{script_path}",
             ]
+
+        # On Linux, wrap with `timeout --foreground` to enforce deadline.
+        # On Windows, use subprocess.run(timeout=...) instead.
+        if is_windows:
+            cmd = nanvixd_args
+        else:
+            cmd = ["timeout", "--foreground", str(timeout)] + nanvixd_args
 
         with log_file.open("w") as fh:
             subprocess.run(
                 cmd,
-                cwd=sysroot,
+                cwd=str(sysroot),
                 stdin=subprocess.DEVNULL,
                 stdout=fh,
                 stderr=fh,
+                timeout=timeout if is_windows else None,
             )
 
     # -- Standalone / ramfs helpers ----------------------------------------
@@ -811,10 +817,13 @@ _np_multiarray_umath numpy_builtin/_multiarray_umath_dummy.c numpy_builtin/numpy
           ``./z test -- test-integration`` — functional tests only
         """
         sysroot = self._sysroot_path()
+        is_windows = sys.platform == "win32"
+        nanvixd_name = "nanvixd.exe" if is_windows else "nanvixd.elf"
+        mkramfs_name = "mkramfs.exe" if is_windows else "mkramfs.elf"
 
-        if not (sysroot / "bin" / "nanvixd.elf").is_file():
+        if not (sysroot / "bin" / nanvixd_name).is_file():
             log.fatal(
-                "nanvixd.elf not found in sysroot.",
+                f"{nanvixd_name} not found in sysroot.",
                 code=EXIT_MISSING_DEP,
                 hint="Run `./z setup` first.",
             )
@@ -827,10 +836,10 @@ _np_multiarray_umath numpy_builtin/_multiarray_umath_dummy.c numpy_builtin/numpy
 
         deployment = self.config.deployment_mode
         if deployment == "standalone":
-            mkramfs = sysroot / "bin" / "mkramfs.elf"
+            mkramfs = sysroot / "bin" / mkramfs_name
             if not mkramfs.is_file():
                 log.fatal(
-                    "mkramfs.elf not found (required for standalone mode).",
+                    f"{mkramfs_name} not found (required for standalone mode).",
                     code=EXIT_MISSING_DEP,
                 )
 
