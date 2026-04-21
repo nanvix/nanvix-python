@@ -67,7 +67,13 @@ jobs:
           mkdir -p release-download
           echo "Release tag: $RELEASE_TAG"
           sleep 5
-          gh release download "$RELEASE_TAG" --pattern "*standalone*.tar.bz2" --dir release-download || true
+          # Retry download with backoff — the release may take a moment
+          # to propagate after the CI job creates it.
+          for attempt in 1 2 3 4 5; do
+            gh release download "$RELEASE_TAG" --pattern "*standalone*.tar.bz2" --dir release-download && break
+            echo "Attempt $attempt failed, retrying in ${attempt}0s..."
+            sleep "$((attempt * 10))"
+          done
           ls -la release-download/
 
       - name: Create Windows zip
@@ -79,8 +85,8 @@ jobs:
           # Find the main standalone tarball (not buildroot)
           TARBALL=$(find release-download -name "*standalone*.tar.bz2" ! -name "*buildroot*" | head -1)
           if [[ -z "$TARBALL" ]]; then
-            echo "::warning::No standalone tarball found"
-            exit 0
+            echo "::error::No standalone tarball found in release $RELEASE_TAG after retries"
+            exit 1
           fi
           echo "Using tarball: $TARBALL"
 
@@ -122,15 +128,18 @@ jobs:
           for pkg in plotly jupyterlab_plotly sympy nltk reportlab share textblob joblib; do
             rm -rf "$SITE/$pkg" "$SITE/${pkg}-"*.dist-info 2>/dev/null || true
           done
-          find "$SITE" -name "*.pyx" -o -name "*.pxd" -o -name "*.c" -o -name "*.h" -o -name "*.cpp" \
-            | xargs rm -f 2>/dev/null || true
+          find "$SITE" \( -name "*.pyx" -o -name "*.pxd" -o -name "*.c" -o -name "*.h" -o -name "*.cpp" \) \
+            -exec rm -f {} + 2>/dev/null || true
 
           echo "Trimmed sysroot: $(du -sh "$SYSROOT" | cut -f1)"
 
-          # Get mkramfs from Nanvix release
-          echo "Downloading mkramfs from Nanvix release..."
-          curl -fsSL https://raw.githubusercontent.com/nanvix/nanvix/refs/heads/dev/scripts/get-nanvix.sh \
-            | bash -s -- --force nanvix-dl
+          # Get mkramfs from Nanvix release via a pinned, verified helper script.
+          GET_NANVIX_REF="10b0dac7b19bf52918b7058ccf117e14bd910727"
+          GET_NANVIX_SHA256="4d4a5be9232cd10c026bdfbcd2ce0ca728ac1e08ce9e185b65b1bfaddf7ca554"
+          curl -fsSLo get-nanvix.sh \
+            "https://raw.githubusercontent.com/nanvix/nanvix/${GET_NANVIX_REF}/scripts/get-nanvix.sh"
+          echo "${GET_NANVIX_SHA256}  get-nanvix.sh" | sha256sum -c -
+          bash get-nanvix.sh --force nanvix-dl
           MKRAMFS=""
           NVX_TAR=$(find nanvix-dl -name "nanvix-*microvm-standalone-*.tar.bz2" ! -name "*windows*" | head -1)
           if [[ -n "$NVX_TAR" ]]; then
