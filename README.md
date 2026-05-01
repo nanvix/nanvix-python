@@ -18,7 +18,7 @@ run Python under `nanvixd`:
 gh release download --repo nanvix/nanvix-python --pattern "*.tar.bz2" --clobber
 tar -xjf microvm-standalone-256mb.tar.bz2
 cd microvm-standalone-256mb
-./bin/nanvixd.elf -- ./bin/python3.12 -c "print('Hello from Nanvix!')"
+./bin/nanvixd.elf -ramfs nanvix_rootfs.img -- ./bin/python3.12 "-c print('hello');PYTHONHOME=/sysroot"
 ```
 
 ### Windows
@@ -27,11 +27,15 @@ cd microvm-standalone-256mb
 gh release download --repo nanvix/nanvix-python --pattern "*.zip" --clobber
 Expand-Archive microvm-standalone-256mb.zip -DestinationPath .
 cd microvm-standalone-256mb
-.\bin\nanvixd.exe -- .\bin\python3.12 -c "print('Hello from Nanvix!')"
+.\bin\nanvixd.exe -ramfs nanvix_rootfs.img -- .\bin\python3.12 "-c print('hello');PYTHONHOME=/sysroot"
 ```
 
 > **Note:** The `-c` flag only works with code that contains no spaces
 > (a nanvixd argument-splitting limitation). Use script files instead.
+> Environment variables are passed after a semicolon in the last argument
+> (e.g. `PYTHONHOME=/sysroot`).
+> Press **Ctrl+C** to exit after the output appears — nanvixd runs in
+> interactive mode and does not terminate automatically.
 
 ### Using Built-in Packages
 
@@ -39,7 +43,7 @@ All pure Python packages are pre-installed. No `pip install` is needed:
 
 ```bash
 echo 'import json; print(json.dumps({"hello": "nanvix"}))' > test.py
-./bin/nanvixd.elf -- ./bin/python3.12 test.py
+./bin/nanvixd.elf -ramfs nanvix_rootfs.img -- ./bin/python3.12 "test.py;PYTHONHOME=/sysroot"
 ```
 
 ## Building from Source
