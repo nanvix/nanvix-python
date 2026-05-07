@@ -79,6 +79,7 @@ Source: [`requirements/site-packages-base.txt`](../requirements/site-packages-ba
 | entrypoints        | 0.4     |
 | fpdf               | 1.7.2   |
 | joblib             | 1.3.2   |
+| pluggy             | 1.6.0   |
 
 ## Extra Packages
 
@@ -140,3 +141,9 @@ Source: [`requirements/site-packages-extra.txt`](../requirements/site-packages-e
 | typing_inspect   | —       |
 | wrapt            | 2.0.1   |
 | plumbum          | 1.9.0   |
+
+### Locale and ISO data
+
+| Package   | Version |
+| --------- | ------- |
+| pycountry | 26.2.16 |
