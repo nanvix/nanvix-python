@@ -132,7 +132,12 @@ jobs:
         run: |
           set -euo pipefail
           ./z benchmark | tee benchmark-output.txt
-          grep -Eo 'Execution time: [0-9]+\.[0-9]{3}s' benchmark-output.txt | tail -n1 | tee benchmark-time.txt
+          timing_line="$(grep -Eo 'Execution time: [0-9]+\.[0-9]+s' benchmark-output.txt | tail -n1 || true)"
+          if [ -z "$timing_line" ]; then
+            echo "::error::Failed to extract benchmark timing from benchmark-output.txt"
+            exit 1
+          fi
+          printf '%s\n' "$timing_line" | tee benchmark-time.txt
           {
             echo "### Hello-world benchmark"
             cat benchmark-time.txt
