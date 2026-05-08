@@ -62,6 +62,7 @@ cd nanvix-python
 ./z setup      # Download Nanvix sysroot and pre-built CPython
 ./z build      # Install pip packages and generate ramfs image
 ./z test       # Run smoke test and functional tests
+./z benchmark  # Run hello-world benchmark and print execution time
 ./z release    # Package standalone runtime bundle into dist/
 ```
 
@@ -72,6 +73,7 @@ cross-platform entry point (`.\z`):
 .\z setup
 .\z build
 .\z test
+.\z benchmark  # Prints: Execution time: X.XXXs
 .\z release    # Produces dist\microvm-standalone-256mb.zip
 ```
 

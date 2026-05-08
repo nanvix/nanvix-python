@@ -11,9 +11,11 @@ workflow, following the same pattern used by all `usr/` packages.
 1. **Get Nanvix Info** — resolves sysroot metadata via `nanvix-zutil resolve`.
 2. **Build** (matrix) — runs `./z setup` → `./z build` → `./z test` → `./z release`
    for each platform/process-mode combination.
-3. **Release** — collects build artifacts, generates a lockfile, and creates
+3. **Benchmark** — runs `./z benchmark` and publishes the `Execution time: X.XXXs`
+   line in the job log, step summary, and `hello-world-benchmark` artifact.
+4. **Release** — collects build artifacts, generates a lockfile, and creates
    a GitHub release tagged `{version}-nanvix-{nanvix_version}`.
-4. **Report Failure** — opens a GitHub issue on scheduled-run failures.
+5. **Report Failure** — opens a GitHub issue on scheduled-run failures.
 
 ## Platform Matrix
 

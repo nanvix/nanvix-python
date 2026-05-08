@@ -39,3 +39,17 @@ for slow environments:
 ```bash
 TIMEOUT_SECONDS=600 ./z test
 ```
+
+## Hello-world Benchmark
+
+Run the built-in benchmark to measure end-to-end hello-world execution:
+
+```bash
+./z benchmark
+```
+
+The benchmark prints the timing in stdout:
+
+```text
+Execution time: X.XXXs
+```

@@ -102,6 +102,50 @@ jobs:
         shell: pwsh
         run: nanvix-zutil test
 
+  benchmark:
+    needs: ci
+    if: >-
+      !cancelled()
+      && needs.ci.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      NANVIX_MACHINE: microvm
+      NANVIX_DEPLOYMENT_MODE: standalone
+      NANVIX_MEMORY_SIZE: 256mb
+      NANVIX_VERSION: ${{ needs.ci.outputs.nanvix_tag }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        run: ./z setup
+
+      - name: Build
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        run: ./z build
+
+      - name: Benchmark hello-world runtime
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ./z benchmark | tee benchmark-output.txt
+          grep -Eo 'Execution time: [0-9]+\.[0-9]{3}s' benchmark-output.txt | tail -n1 | tee benchmark-time.txt
+          {
+            echo "### Hello-world benchmark"
+            cat benchmark-time.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark output
+        uses: actions/upload-artifact@v4
+        with:
+          name: hello-world-benchmark
+          path: |
+            benchmark-output.txt
+            benchmark-time.txt
+
   release:
     needs: ci
     if: github.event_name != 'pull_request'
