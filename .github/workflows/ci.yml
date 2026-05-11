@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   ci:
-    uses: nanvix/workflows/.github/workflows/nanvix-ci.yml@v1.15.0
+    uses: nanvix/workflows/.github/workflows/nanvix-ci.yml@v2.0.0
     with:
       zutil-version: "v0.7.48"
       platforms: "[\"microvm\"]"
