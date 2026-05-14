@@ -173,10 +173,10 @@ class NanvixPythonBuild(ZScript):
         if site_sentinel.is_file():
             h.update(site_sentinel.read_bytes())
 
-        # Factor in PIL shim sources
-        pil_shim = self.repo_root / "patches" / "PIL"
-        if pil_shim.is_dir():
-            for src in sorted(pil_shim.rglob("*.py")):
+        # Factor in all patch/shim sources (PIL, numpy, pandas, etc.)
+        patches_dir = self.repo_root / "patches"
+        if patches_dir.is_dir():
+            for src in sorted(patches_dir.rglob("*.py")):
                 h.update(src.read_bytes())
 
         # Factor in test scripts
@@ -533,20 +533,24 @@ class NanvixPythonBuild(ZScript):
         sentinel.write_text(req_hash)
 
     def _install_pil_shim(self, site_pkg: Path) -> None:
-        """Copy the pure-Python PIL shim into site-packages.
+        """Copy all pure-Python shim packages from patches/ into site-packages.
 
-        Replaces Pillow's C extension with lightweight header-only
-        parsing that python-pptx needs for image handling.
+        Each first-level directory under patches/ (PIL, numpy, pandas, etc.)
+        is treated as a shim package that replaces a C extension dependency
+        with a lightweight pure-Python stub.
         """
-        pil_src = self.repo_root / "patches" / "PIL"
-        pil_dst = site_pkg / "PIL"
-        if not pil_src.is_dir():
-            log.warning("patches/PIL not found; skipping PIL shim installation")
+        patches_dir = self.repo_root / "patches"
+        if not patches_dir.is_dir():
+            log.warning("patches/ not found; skipping shim installation")
             return
-        if pil_dst.exists():
-            shutil.rmtree(pil_dst)
-        shutil.copytree(pil_src, pil_dst)
-        log.info(f"installed PIL shim into {pil_dst}")
+        for shim_src in sorted(patches_dir.iterdir()):
+            if not shim_src.is_dir() or shim_src.name.startswith("."):
+                continue
+            shim_dst = site_pkg / shim_src.name
+            if shim_dst.exists():
+                shutil.rmtree(shim_dst)
+            shutil.copytree(shim_src, shim_dst)
+            log.info(f"installed {shim_src.name} shim into {shim_dst}")
 
     def _patch_openpyxl_lxml(self, site_pkg: Path) -> None:
         """Disable lxml usage in openpyxl.
@@ -569,6 +573,298 @@ class NanvixPythonBuild(ZScript):
         if patched != content:
             xml_init.write_text(patched)
             log.info("patched openpyxl to disable lxml (missing xmlfile)")
+
+    def _install_lxml_python(self, site_pkg: Path) -> None:
+        """Copy lxml Python wrapper files into site-packages.
+
+        The lxml C extensions (_lxml_etree, _lxml_elementpath) are statically
+        linked into the CPython interpreter.  The Python wrapper files that
+        make ``import lxml.etree`` work live in the cpython buildroot at
+        ``.nanvix/buildroot/python-packages/lxml/``.  This method copies
+        them and writes a thin ``etree.py`` shim that bridges from the
+        built-in C module name to the ``lxml.etree`` import path.
+        """
+        # Try to locate lxml Python files from the cpython buildroot
+        cpython_lxml = (
+            self.repo_root.parent
+            / "usr"
+            / "bin"
+            / "cpython"
+            / ".nanvix"
+            / "buildroot"
+            / "python-packages"
+            / "lxml"
+        )
+        if not cpython_lxml.is_dir():
+            log.warning(
+                f"lxml Python files not found at {cpython_lxml}; "
+                "lxml.etree will not be available"
+            )
+            return
+
+        dst = site_pkg / "lxml"
+        if dst.exists():
+            shutil.rmtree(dst)
+        shutil.copytree(cpython_lxml, dst)
+
+        # Write the etree.py shim bridging _lxml_etree → lxml.etree
+        etree_shim = dst / "etree.py"
+        etree_shim.write_text(
+            "from _lxml_etree import *\n"
+            "from _lxml_etree import _Element, _ElementTree, "
+            "_Comment, _ProcessingInstruction, ElementBase, QName, _Attrib\n"
+            "from _lxml_etree import xmlfile, htmlfile\n",
+            encoding="utf-8",
+        )
+
+        # Write _elementpath.py shim if not already present
+        epath_shim = dst / "_elementpath.py"
+        if not epath_shim.exists() or epath_shim.stat().st_size < 10:
+            epath_shim.write_text(
+                "from _lxml_elementpath import *\n",
+                encoding="utf-8",
+            )
+
+        log.info(f"installed lxml Python wrappers from {cpython_lxml}")
+
+    def _install_rapidfuzz_python(self, site_pkg: Path) -> None:
+        """Copy rapidfuzz Python wrapper files into site-packages.
+
+        The rapidfuzz C++ extensions (_rf_utils_cpp, _rf_fuzz_cpp, etc.)
+        are statically linked into the CPython interpreter.  The Python
+        files that make ``import rapidfuzz`` work live in the cpython
+        buildroot at ``.nanvix/buildroot/python-packages/rapidfuzz/``.
+        This method copies them and writes thin Python shims that bridge
+        from the flat built-in module names to the expected import paths.
+        """
+        cpython_rf = (
+            self.repo_root.parent
+            / "usr"
+            / "bin"
+            / "cpython"
+            / ".nanvix"
+            / "buildroot"
+            / "python-packages"
+            / "rapidfuzz"
+        )
+        if not cpython_rf.is_dir():
+            log.warning(
+                f"rapidfuzz Python files not found at {cpython_rf}; "
+                "rapidfuzz C++ extensions will not be available"
+            )
+            return
+
+        dst = site_pkg / "rapidfuzz"
+        if dst.exists():
+            shutil.rmtree(dst)
+        shutil.copytree(cpython_rf, dst)
+
+        # Write Python shims bridging flat builtin names to package paths
+        for name, src in {
+            "utils_cpp.py": "from _rf_utils_cpp import *\n",
+            "fuzz_cpp.py": "from _rf_fuzz_cpp import *\n",
+            "fuzz_cpp_sse2.py": "from _rf_fuzz_cpp_sse2 import *\n",
+            "_feature_detector_cpp.py": "from _rf_feature_detector_cpp import *\n",
+        }.items():
+            (dst / name).write_text(src, encoding="utf-8")
+
+        dist_dir = dst / "distance"
+        dist_dir.mkdir(exist_ok=True)
+        for name, src in {
+            "_initialize_cpp.py": "from _rf_dist_initialize_cpp import *\n",
+            "metrics_cpp.py": "from _rf_dist_metrics_cpp import *\n",
+            "metrics_cpp_sse2.py": "from _rf_dist_metrics_cpp_sse2 import *\n",
+        }.items():
+            (dist_dir / name).write_text(src, encoding="utf-8")
+
+        log.info(f"installed rapidfuzz Python wrappers from {cpython_rf}")
+
+    def _install_wordcloud_python(self, site_pkg: Path) -> None:
+        """Copy wordcloud Python files into site-packages.
+
+        The wordcloud Cython extension (_wc_query_integral_image) is
+        statically linked into CPython.  This copies the Python files
+        and writes a shim for the native module.
+        """
+        cpython_wc = (
+            self.repo_root.parent
+            / "usr"
+            / "bin"
+            / "cpython"
+            / ".nanvix"
+            / "buildroot"
+            / "python-packages"
+            / "wordcloud"
+        )
+        if not cpython_wc.is_dir():
+            log.warning(
+                f"wordcloud Python files not found at {cpython_wc}; "
+                "wordcloud C extension will not be available"
+            )
+            return
+
+        dst = site_pkg / "wordcloud"
+        if dst.exists():
+            shutil.rmtree(dst)
+        shutil.copytree(cpython_wc, dst)
+
+        # Write Python shim with fallback for when numpy shim lacks buffer protocol
+        (dst / "query_integral_image.py").write_text(
+            '''"""Bridge to native C extension with pure-Python fallback."""
+try:
+    from _wc_query_integral_image import query_integral_image as _c_impl
+except ImportError:
+    _c_impl = None
+
+
+def query_integral_image(integral_image, size_x, size_y, random_state):
+    """Query integral image for free rectangles.
+
+    Uses the native C extension when numpy arrays support the buffer
+    protocol (i.e. real numpy).  Falls back to pure Python otherwise.
+    """
+    if _c_impl is not None:
+        try:
+            return _c_impl(integral_image, size_x, size_y, random_state)
+        except TypeError:
+            pass  # ndarray shim — fall through to Python impl
+
+    # Pure-Python fallback
+    x = integral_image.shape[0]
+    y = integral_image.shape[1]
+    hits = 0
+    for i in range(x - size_x):
+        for j in range(y - size_y):
+            area = (integral_image[i, j] + integral_image[i + size_x, j + size_y]
+                    - integral_image[i + size_x, j] - integral_image[i, j + size_y])
+            if not area:
+                hits += 1
+    if not hits:
+        return None
+    goal = random_state.randint(0, hits)
+    hits = 0
+    for i in range(x - size_x):
+        for j in range(y - size_y):
+            area = (integral_image[i, j] + integral_image[i + size_x, j + size_y]
+                    - integral_image[i + size_x, j] - integral_image[i, j + size_y])
+            if not area:
+                hits += 1
+                if hits == goal:
+                    return i, j
+''',
+            encoding="utf-8",
+        )
+
+        log.info(f"installed wordcloud Python wrappers from {cpython_wc}")
+
+    def _install_pillow_python(self, site_pkg: Path) -> None:
+        """Copy real Pillow Python files into site-packages.
+
+        The Pillow C extensions (_pil_imaging, _pil_imagingmath,
+        _pil_imagingmorph) are statically linked into CPython.  This
+        copies the real Pillow Python files and writes shim modules.
+        """
+        cpython_pil = (
+            self.repo_root.parent
+            / "usr"
+            / "bin"
+            / "cpython"
+            / ".nanvix"
+            / "buildroot"
+            / "python-packages"
+            / "PIL"
+        )
+        if not cpython_pil.is_dir():
+            log.warning(
+                f"Pillow Python files not found at {cpython_pil}; "
+                "Pillow C extensions will not be available"
+            )
+            return
+
+        dst = site_pkg / "PIL"
+        if dst.exists():
+            shutil.rmtree(dst)
+        shutil.copytree(cpython_pil, dst)
+
+        # Write Python shims bridging flat builtin names to package paths
+        (dst / "_imaging.py").write_text(
+            "from _pil_imaging import *\n",
+            encoding="utf-8",
+        )
+        (dst / "_imagingmath.py").write_text(
+            "from _pil_imagingmath import *\n",
+            encoding="utf-8",
+        )
+        (dst / "_imagingmorph.py").write_text(
+            "from _pil_imagingmorph import *\n",
+            encoding="utf-8",
+        )
+
+        log.info(f"installed Pillow Python wrappers from {cpython_pil}")
+
+    def _install_numpy_python(self, site_pkg: Path) -> None:
+        """Copy real NumPy Python files into site-packages.
+
+        The NumPy _multiarray_umath C extension is statically linked
+        into CPython as _np_multiarray_umath.  This copies the Python
+        package and writes a bridge shim at numpy/core/_multiarray_umath.py.
+        """
+        cpython_np = (
+            self.repo_root.parent
+            / "usr"
+            / "bin"
+            / "cpython"
+            / ".nanvix"
+            / "buildroot"
+            / "python-packages"
+            / "numpy"
+        )
+        if not cpython_np.is_dir():
+            log.warning(
+                f"NumPy Python files not found at {cpython_np}; "
+                "NumPy C extension will not be available"
+            )
+            return
+
+        dst = site_pkg / "numpy"
+        if dst.exists():
+            shutil.rmtree(dst)
+        shutil.copytree(cpython_np, dst)
+
+        # The bridge shim should already be in place from the buildroot copy
+
+        log.info(f"installed NumPy Python wrappers from {cpython_np}")
+
+    def _install_pandas_python(self, site_pkg: Path) -> None:
+        """Copy real pandas Python files into site-packages.
+
+        The pandas C extensions (45 modules) are statically linked into
+        CPython as _pd_* builtins.  This copies the Python package with
+        bridge shims that redirect imports to the flat builtins.
+        """
+        cpython_pd = (
+            self.repo_root.parent
+            / "usr"
+            / "bin"
+            / "cpython"
+            / ".nanvix"
+            / "buildroot"
+            / "python-packages"
+            / "pandas"
+        )
+        if not cpython_pd.is_dir():
+            log.warning(
+                f"pandas Python files not found at {cpython_pd}; "
+                "pandas C extensions will not be available"
+            )
+            return
+
+        dst = site_pkg / "pandas"
+        if dst.exists():
+            shutil.rmtree(dst)
+        shutil.copytree(cpython_pd, dst)
+
+        log.info(f"installed pandas Python wrappers from {cpython_pd}")
 
     # ------------------------------------------------------------------
     # Lifecycle hooks
@@ -678,6 +974,25 @@ class NanvixPythonBuild(ZScript):
         # Patch openpyxl to use et_xmlfile instead of lxml.etree.xmlfile
         self._patch_openpyxl_lxml(site_pkg)
 
+        # Install lxml Python wrappers (C extensions are in the interpreter)
+        self._install_lxml_python(site_pkg)
+
+        # Install rapidfuzz Python wrappers (C++ extensions in interpreter)
+        self._install_rapidfuzz_python(site_pkg)
+
+        # Install wordcloud Python wrappers (Cython extension in interpreter)
+        self._install_wordcloud_python(site_pkg)
+
+        # Install real Pillow Python files (C extensions in interpreter)
+        # This overwrites the PIL shim installed above
+        self._install_pillow_python(site_pkg)
+
+        # Install numpy Python files (C extension in interpreter)
+        self._install_numpy_python(site_pkg)
+
+        # Install pandas Python files (C extensions in interpreter)
+        self._install_pandas_python(site_pkg)
+
         # Build ramfs image for standalone deployment
         if self.config.deployment_mode == "standalone":
             self._ensure_ramfs(sysroot)
@@ -723,6 +1038,12 @@ class NanvixPythonBuild(ZScript):
         self._install_site_packages(site_pkg)
         self._install_pil_shim(site_pkg)
         self._patch_openpyxl_lxml(site_pkg)
+        self._install_lxml_python(site_pkg)
+        self._install_rapidfuzz_python(site_pkg)
+        self._install_wordcloud_python(site_pkg)
+        self._install_pillow_python(site_pkg)
+        self._install_numpy_python(site_pkg)
+        self._install_pandas_python(site_pkg)
 
         # Copy test scripts into sysroot
         tests_dir = self.repo_root / "tests"

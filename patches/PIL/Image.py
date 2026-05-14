@@ -207,3 +207,18 @@ def new(mode, size, color=0):
 
 import builtins as _builtins
 builtins_open = _builtins.open
+
+# Rotation constants
+ROTATE_90 = 2
+ROTATE_180 = 3
+ROTATE_270 = 4
+FLIP_LEFT_RIGHT = 0
+FLIP_TOP_BOTTOM = 1
+TRANSPOSE = 5
+TRANSVERSE = 6
+
+# Resampling
+NEAREST = 0
+BILINEAR = 2
+BICUBIC = 3
+LANCZOS = 1

@@ -3,8 +3,6 @@ venv/
 cache/
 sysroot/
 buildroot/
-stripped-sysroot/
-manifests/
 .yamllint.yml
 black.toml
 env.json
