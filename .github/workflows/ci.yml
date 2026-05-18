@@ -29,7 +29,7 @@ jobs:
   ci:
     uses: nanvix/workflows/.github/workflows/nanvix-ci.yml@v2.0.2
     with:
-      zutil-version: "v0.8.5"
+      zutil-version: "v0.9.2"
       platforms: "[\"microvm\"]"
       process-modes: "[\"standalone\"]"
       memory-sizes: "[\"256mb\"]"
