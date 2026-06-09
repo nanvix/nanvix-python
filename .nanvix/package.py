@@ -1,11 +1,14 @@
-# pyright: reportPrivateUsage=information
+# Copyright(c) The Maintainers of Nanvix.
+# Licensed under the MIT License.
 
+# pyright: reportPrivateUsage=information
 import shutil
 import subprocess
 import zipfile
 
 from z import _IS_WINDOWS, NanvixPythonBuild, _mkramfs_binary, _nanvixd_binary
-from nanvix_zutil import EXIT_BUILD_FAILURE, log, EXIT_MISSING_DEP, paths
+from nanvix_zutil import log, paths
+from nanvix_zutil.exitcodes import EXIT_BUILD_FAILURE, EXIT_MISSING_DEP
 
 
 def package(script: NanvixPythonBuild) -> None:
