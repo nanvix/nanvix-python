@@ -1,7 +1,7 @@
 [package]
 name = "nanvix-python"
 version = "3.12.3"
-nanvix-version = "0.16.140"
+nanvix-version = "0.17.5"
 
 [builds]
 [builds.matrix]
