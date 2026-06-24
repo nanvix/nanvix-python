@@ -845,14 +845,18 @@ class NanvixPythonBuild(ZScript):
                 if not member.isfile():
                     continue
 
+                # Tolerate both the legacy layout (entries rooted under
+                # ``sysroot/``) and the post-nanvix/cpython#742 layout
+                # where the ``sysroot/`` prefix has been dropped.
+                name = member.name.removeprefix("sysroot/")
+
                 # bin/python.elf → sysroot/bin/python3.12
-                if member.name == "bin/python.elf":
+                if name == "bin/python.elf":
                     member.name = "bin/python3.12"
                     tf.extract(member, path=sysroot, filter="data")
-                # sysroot/lib/python3.12/* → sysroot/lib/python3.12/*
-                elif member.name.startswith("sysroot/lib/python3.12/"):
-                    # Strip leading "sysroot/" prefix
-                    member.name = member.name.removeprefix("sysroot/")
+                # lib/python3.12/* → sysroot/lib/python3.12/*
+                elif name.startswith("lib/python3.12/"):
+                    member.name = name
                     tf.extract(member, path=sysroot, filter="data")
 
         sentinel.write_text(version_specifier)
