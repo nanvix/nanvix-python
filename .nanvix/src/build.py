@@ -801,6 +801,16 @@ class BuildMixin(LibMixin):
             )
         log.success("release: staging complete")
 
+        # Expose ELF binaries in a visible directory so that CI artifact
+        # upload globs (e.g. **/*.elf) can find them — hidden directories
+        # like .nanvix/ are excluded by actions/upload-artifact by default.
+        elf_out = repo_root() / "elf-binaries"
+        if elf_out.exists():
+            shutil.rmtree(elf_out)
+        elf_out.mkdir()
+        for elf in (sysroot / "bin").glob("*.elf"):
+            shutil.copy2(elf, elf_out)
+
     # ------------------------------------------------------------------
     # Lifecycle entry point
     # ------------------------------------------------------------------
