@@ -19,13 +19,13 @@ class CleanMixin(LibMixin):
 
     def clean(self) -> None:
         """Remove build artifacts."""
-        # Clean release assets
-        dist_dir = paths.dist_dir()
-        if dist_dir.is_dir():
-            shutil.rmtree(dist_dir)
-        release_dir = repo_root() / "release-assets"
-        if release_dir.is_dir():
-            shutil.rmtree(release_dir)
+        # Clean release assets (staged tree + dist archives)
+        for d in (paths.release_dir(), paths.dist_dir()):
+            if d.is_dir():
+                shutil.rmtree(d)
+        legacy_release = repo_root() / "release-assets"
+        if legacy_release.is_dir():
+            shutil.rmtree(legacy_release)
 
         # Clean ramfs artifacts
         self._cleanup_ramfs()
