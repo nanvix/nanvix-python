@@ -9,9 +9,9 @@ Nanvix microkernel.
 
 Usage:
     ./z setup     # Download Nanvix sysroot and pre-built CPython buildroot
-    ./z build     # Install pip packages and generate ramfs
+    ./z build     # Install pip packages, generate ramfs, stage release bundle
     ./z test      # Run smoke test and functional tests
-    ./z release   # Package standalone runtime bundle
+    ./z release   # Package the staged bundle into a release archive
     ./z benchmark # Run a hello-world wall-time measurement
     ./z clean     # Remove build artifacts
 
@@ -20,9 +20,9 @@ stage:
 
   - src/lib.py        shared helpers + cross-mixin forward declarations
   - src/setup.py      SetupMixin
-  - src/build.py      BuildMixin (also owns site-packages + ramfs/initrd)
+  - src/build.py      BuildMixin (also owns site-packages + ramfs/initrd
+                      and stages the release bundle under release_dir())
   - src/test.py       TestMixin
-  - src/release.py    ReleaseMixin
   - src/benchmark.py  BenchmarkMixin
   - src/clean.py      CleanMixin
 
@@ -34,7 +34,6 @@ from __future__ import annotations
 from src.benchmark import BenchmarkMixin
 from src.build import BuildMixin
 from src.clean import CleanMixin
-from src.release import ReleaseMixin
 from src.setup import SetupMixin
 from src.test import TestMixin
 
@@ -43,7 +42,6 @@ class NanvixPythonBuild(
     SetupMixin,
     BuildMixin,
     TestMixin,
-    ReleaseMixin,
     BenchmarkMixin,
     CleanMixin,
 ):
@@ -63,4 +61,4 @@ if __name__ == "__main__":
 # rather than one of the partial mixin bases. Without this, only the
 # lifecycle hooks defined on the *first* mixin show up in the CLI.
 # TODO: https://github.com/nanvix/zutils/issues/269
-del BenchmarkMixin, BuildMixin, CleanMixin, ReleaseMixin, SetupMixin, TestMixin
+del BenchmarkMixin, BuildMixin, CleanMixin, SetupMixin, TestMixin
