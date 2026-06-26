@@ -149,6 +149,12 @@ class LibMixin(ZScript):
                 except subprocess.TimeoutExpired:
                     fh.write(f"\nTIMEOUT after {timeout}s\n")
 
+    def _asset_prefix(self) -> str:
+        """Return the platform/mode/memory triple used for archive names."""
+        return (
+            f"{self.config.machine}-{self.config.deployment_mode}"
+            f"-{self.config.memory_size}"
+        )
     # ------------------------------------------------------------------
     # Forward declarations — concrete implementations live in BuildMixin.
     # Declared here so basedpyright resolves cross-mixin self.<helper>()
