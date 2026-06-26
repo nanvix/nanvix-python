@@ -95,7 +95,7 @@ jobs:
           tar -xzf $tarball.FullName -C linux-build
           $ramfs = Get-ChildItem linux-build -Recurse -Filter "nanvix_rootfs.img" | Select-Object -First 1
           if (-not $ramfs) { Write-Error "nanvix_rootfs.img not found in tarball"; exit 1 }
-          $dest = Join-Path $env:GITHUB_WORKSPACE ".nanvix" "nanvix_rootfs.img"
+          $dest = Join-Path $env:GITHUB_WORKSPACE ".nanvix" "out" "test" "nanvix_rootfs.img"
           New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
           Copy-Item $ramfs.FullName $dest
           Write-Host "Placed ramfs at $dest ($('{0:N0}' -f (Get-Item $dest).Length) bytes)"
