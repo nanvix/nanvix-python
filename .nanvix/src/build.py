@@ -492,7 +492,8 @@ class BuildMixin(LibMixin):
         initrd: Path = make_initrd(
             self,
             "python3.12",
-            test=False,
+            # Output goes to test_out() so the bundle's bin/ stays clean.
+            test=True,
             args=InitRdArgs(
                 app_args=[
                     "-S",
@@ -620,7 +621,8 @@ class BuildMixin(LibMixin):
         mode = self.config.deployment_mode
         platform_name = self.config.machine
         asset_prefix = self._asset_prefix()
-        bundle_dir = paths.release_dir()
+        # Stage under <asset_prefix>/ so the archive extracts into that dir.
+        bundle_dir = paths.release_dir() / asset_prefix
 
         if not (sysroot / "bin" / nanvixd_name).is_file():
             log.fatal(
@@ -654,10 +656,8 @@ class BuildMixin(LibMixin):
         python_target = bin_dir / "python3.12"
         python_link = bin_dir / "python3"
         if python_target.is_file():
-            try:
-                python_link.symlink_to("python3.12")
-            except OSError:
-                shutil.copy2(python_target, python_link)
+            # Copy rather than symlink: the archive packagers skip symlinks.
+            shutil.copy2(python_target, python_link)
 
         # Copy Python stdlib + site-packages
         log.info("release: copying Python standard library and site-packages")
