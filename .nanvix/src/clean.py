@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 
 from nanvix_zutil import CFG_SYSROOT, log, paths
-from nanvix_zutil.paths import nanvix_root, repo_root
+from nanvix_zutil.paths import repo_root, test_out
 
 from .lib import LibMixin
 
@@ -29,9 +29,9 @@ class CleanMixin(LibMixin):
 
         # Clean ramfs artifacts
         self._cleanup_ramfs()
-        ramfs_img = nanvix_root() / "nanvix_rootfs.img"
+        ramfs_img = test_out() / "nanvix_rootfs.img"
         ramfs_img.unlink(missing_ok=True)
-        ramfs_sentinel = nanvix_root() / ".ramfs-built"
+        ramfs_sentinel = test_out() / ".ramfs-built"
         ramfs_sentinel.unlink(missing_ok=True)
 
         # Clean initrd

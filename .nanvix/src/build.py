@@ -21,7 +21,7 @@ from nanvix_zutil import log, make_initrd
 from nanvix_zutil import paths
 from nanvix_zutil.exitcodes import EXIT_BUILD_FAILURE, EXIT_MISSING_DEP
 from nanvix_zutil.helpers import InitRdArgs
-from nanvix_zutil.paths import nanvix_root, repo_root
+from nanvix_zutil.paths import nanvix_root, repo_root, test_out
 
 from .lib import LibMixin, mkramfs_binary, nanvixd_binary
 
@@ -90,7 +90,7 @@ class BuildMixin(LibMixin):
         if self._ramfs_img and self._ramfs_img.is_file():
             return self._ramfs_img
 
-        work_dir = nanvix_root()
+        work_dir = test_out()
         img = work_dir / "nanvix_rootfs.img"
         sentinel = work_dir / ".ramfs-built"
         current_hash = self._ramfs_input_hash(sysroot)
@@ -118,10 +118,11 @@ class BuildMixin(LibMixin):
         if self._ramfs_img and self._ramfs_img.is_file():
             return self._ramfs_img
 
-        work_dir = nanvix_root()
+        work_dir = test_out()
         img = work_dir / "nanvix_rootfs.img"
         sentinel = work_dir / ".ramfs-built"
         current_hash = self._ramfs_input_hash(sysroot)
+        work_dir.mkdir(parents=True, exist_ok=True)
 
         # Skip rebuild if ramfs image and sentinel are up-to-date
         if (
@@ -133,7 +134,7 @@ class BuildMixin(LibMixin):
             self._ramfs_img = img
             return img
 
-        stripped = work_dir / "stripped-sysroot"
+        stripped = nanvix_root() / "stripped-sysroot"
         self._create_stripped_sysroot(sysroot, stripped)
         self._stripped_sysroot = stripped
 
@@ -148,7 +149,7 @@ class BuildMixin(LibMixin):
         # Docker (Python 3.12) and placed at the sysroot root.
 
         # Generate build manifests for post-build inspection
-        self._write_build_manifests(sysroot, stripped, work_dir)
+        self._write_build_manifests(sysroot, stripped, nanvix_root())
 
         log.info("building ramfs image for standalone mode")
         mkramfs = str((sysroot / "bin" / mkramfs_binary()).resolve())
