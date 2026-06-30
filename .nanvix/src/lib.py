@@ -19,7 +19,6 @@ from pathlib import Path
 
 from nanvix_zutil import CFG_SYSROOT, TOOLCHAIN_CONTAINER_PATH, ZScript, log
 from nanvix_zutil.exitcodes import EXIT_MISSING_DEP
-from nanvix_zutil.paths import repo_root
 
 __all__ = (
     "DEFAULT_TIMEOUT",
@@ -74,15 +73,6 @@ class LibMixin(ZScript):
             if shutil.which(name):
                 return name
         return None
-
-    def _ensure_python_in_repo_root(self, sysroot: Path) -> None:
-        repo_python = repo_root() / "python3.12"
-        if repo_python.exists():
-            return
-        shutil.copy2(sysroot / "bin" / "python3.12", repo_python)
-
-    def _cleanup_python_in_repo_root(self) -> None:
-        (repo_root() / "python3.12").unlink(missing_ok=True)
 
     def _nanvix_run(
         self,

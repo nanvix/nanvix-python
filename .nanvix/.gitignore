@@ -3,6 +3,7 @@ venv
 cache
 sysroot
 buildroot
+out
 .yamllint.yml
 black.toml
 env.json

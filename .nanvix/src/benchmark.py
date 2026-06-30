@@ -106,7 +106,6 @@ class BenchmarkMixin(LibMixin):
         if deployment == "standalone":
             self._cleanup_ramfs()
             self._cleanup_initrd()
-            self._cleanup_python_in_repo_root()
 
         if "hello" not in output:
             print(output)

@@ -123,7 +123,6 @@ class TestMixin(LibMixin):
         finally:
             self._cleanup_ramfs()
             self._cleanup_initrd()
-            self._cleanup_python_in_repo_root()
 
     def _run_smoke_test(self, sysroot: Path) -> None:
         """Run the layer-2 smoke test."""

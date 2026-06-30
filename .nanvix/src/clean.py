@@ -44,7 +44,4 @@ class CleanMixin(LibMixin):
             if snapshots_dir.is_dir():
                 shutil.rmtree(snapshots_dir)
 
-        # Clean python3.12 copy used by make_initrd
-        self._cleanup_python_in_repo_root()
-
         log.success("clean complete")
