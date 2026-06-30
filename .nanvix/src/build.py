@@ -489,12 +489,11 @@ class BuildMixin(LibMixin):
         if self._initrd and self._initrd.is_file():
             return self._initrd
 
-        self._ensure_python_in_repo_root(sysroot)
         initrd: Path = make_initrd(
             self,
-            "python3.12",
+            sysroot / "bin" / "python3.12",
             # Output goes to test_out() so the bundle's bin/ stays clean.
-            test=True,
+            test_out(),
             args=InitRdArgs(
                 app_args=[
                     "-S",
