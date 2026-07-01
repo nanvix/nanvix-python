@@ -34,78 +34,16 @@ jobs:
       memory-sizes: '["256mb"]'
       skip-full-test-modes: "[]"
       caller-event-name: ${{ github.event_name }}
-      windows-test: false
+      windows-test: true
       python-paths: ".nanvix/z.py tests/smoke_test_l2.py"
       yaml-paths: ".github/workflows/ci.yml"
       release-notes-extra: |
         CPython 3.12.3 distribution for Nanvix with pure Python pip packages.
       docker-image: "ghcr.io/nanvix/toolchain-python@sha256:2ef7213bfff85e927f18d8f0fc53063b9c6ffed236a6b30c92f6b4e148c2dec4" # yamllint disable-line rule:line-length
+      test-output-globs: '["nanvix_rootfs.img"]'
     secrets:
       GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
       DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN || secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
-
-  # Custom Windows test that reuses the ramfs image from the Linux build
-  # instead of rebuilding it (Docker can't run the Linux toolchain image
-  # on Windows CI runners, so .py→.pyc pre-compilation would be skipped).
-  windows-test:
-    needs: ci
-    if: >-
-      !cancelled()
-      && needs.ci.result == 'success'
-    runs-on: windows-latest
-    env:
-      NANVIX_MACHINE: microvm
-      NANVIX_DEPLOYMENT_MODE: standalone
-      NANVIX_MEMORY_SIZE: 256mb
-      NANVIX_VERSION: ${{ needs.ci.outputs.nanvix_tag }}
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Install nanvix-zutil
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
-        shell: pwsh
-        run: |
-          $zutils_version = (Get-Content .zutils-version).Trim()
-          $jq = '.assets[] | select(.name | endswith(".whl")) | .browser_download_url'
-          $wheel = gh api "repos/nanvix/zutils/releases/tags/$zutils_version" --jq $jq
-          python -m pip install $wheel
-
-      - name: Setup
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
-        shell: pwsh
-        run: >-
-          nanvix-zutil setup --with-docker
-          ghcr.io/nanvix/toolchain-python@sha256:2ef7213bfff85e927f18d8f0fc53063b9c6ffed236a6b30c92f6b4e148c2dec4
-
-      - name: Download Linux build artifact
-        uses: actions/download-artifact@v5
-        with:
-          name: >-
-            nanvix-python-${{ needs.ci.outputs.package_version }}-x86-microvm-standalone-256mb
-          path: linux-build
-
-      - name: Extract ramfs from Linux tarball
-        shell: pwsh
-        run: |
-          $tarball = Get-ChildItem linux-build -Filter "*.tar.gz" | Select-Object -First 1
-          if (-not $tarball) { Write-Error "No .tar.gz tarball found in linux-build"; exit 1 }
-          Write-Host "Extracting ramfs from $($tarball.Name)"
-          tar -xzf $tarball.FullName -C linux-build
-          $ramfs = Get-ChildItem linux-build -Recurse -Filter "nanvix_rootfs.img" | Select-Object -First 1
-          if (-not $ramfs) { Write-Error "nanvix_rootfs.img not found in tarball"; exit 1 }
-          $dest = Join-Path $env:GITHUB_WORKSPACE ".nanvix" "out" "test" "nanvix_rootfs.img"
-          New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
-          Copy-Item $ramfs.FullName $dest
-          Write-Host "Placed ramfs at $dest ($('{0:N0}' -f (Get-Item $dest).Length) bytes)"
-          echo "NANVIX_PREBUILT_RAMFS=$dest" >> $env:GITHUB_ENV
-
-      - name: Test
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
-        shell: pwsh
-        run: nanvix-zutil test
 
   release:
     needs: ci
@@ -184,7 +122,7 @@ jobs:
           fi
 
   windows-release:
-    needs: [ci, windows-test, release]
+    needs: [ci, release]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     env:
