@@ -11,6 +11,7 @@ pre-compilation pipeline.
 from __future__ import annotations
 
 import hashlib
+from os import environ
 import shutil
 import subprocess
 import sys
@@ -82,11 +83,18 @@ class BuildMixin(LibMixin):
     def _ensure_ramfs(self, sysroot: Path) -> Path:
         """Validate that an up-to-date ramfs image exists.
 
-        Used by ``test``, ``release``, and ``benchmark``: never builds.
-        Building the ramfs requires Docker (for .pyc pre-compilation)
-        and is therefore confined to ``./z build`` via
-        :meth:`_build_ramfs`.  A missing or stale image is fatal.
+        Used by ``test``, ``release``, and ``benchmark``: never builds. Building
+        the ramfs requires Docker (for .pyc pre-compilation) and is therefore
+        confined to ``./z build`` via :meth:`_build_ramfs`. A missing or stale
+        image is fatal. In CI, this short-circuits if the expected ramfs image
+        is found.
         """
+        if environ.get("CI"):
+            img = test_out() / "nanvix_rootfs.img"
+            if img.is_file():
+                self._ramfs_img = img
+                return self._ramfs_img
+
         if self._ramfs_img and self._ramfs_img.is_file():
             return self._ramfs_img
 

@@ -87,19 +87,7 @@ class TestMixin(LibMixin):
         if deployment == "standalone":
             # Install _boot.py entry point into sysroot
             self._install_boot_script(sysroot)
-
-            prebuilt = os.environ.get("NANVIX_PREBUILT_RAMFS")
-            if prebuilt:
-                p = Path(prebuilt)
-                if not p.is_file():
-                    log.fatal(
-                        f"NANVIX_PREBUILT_RAMFS points to non-existent file: {p}",
-                        code=EXIT_MISSING_DEP,
-                    )
-                log.info(f"using pre-built ramfs: {p}")
-                self._ramfs_img = p
-            else:
-                self._ensure_ramfs(sysroot)
+            self._ensure_ramfs(sysroot)
 
         # Standalone exclusions
         exclude_tests = os.environ.get("EXCLUDE_TESTS", "")
