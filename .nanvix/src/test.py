@@ -9,7 +9,6 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
 import time
 from pathlib import Path
 
@@ -115,7 +114,7 @@ class TestMixin(LibMixin):
     def _run_smoke_test(self, sysroot: Path) -> None:
         """Run the layer-2 smoke test."""
         log.info("=== smoke test ===")
-        tmp = Path(tempfile.gettempdir())
+        tmp = self._log_directory()
         log_file = tmp / "smoke.log"
         self._nanvix_run(sysroot, "smoke_test_l2.py", log_file)
 
@@ -253,7 +252,7 @@ class TestMixin(LibMixin):
         vmem.unlink(missing_ok=True)
         cbor.unlink(missing_ok=True)
 
-        tmp = Path(tempfile.gettempdir())
+        tmp = self._log_directory()
 
         # --- Phase 1: cold boot to generate snapshot ---------------------
         # nanvixd writes the snapshot files (kernel.vmem + kernel.whp.cbor)
@@ -310,7 +309,7 @@ class TestMixin(LibMixin):
 
         # --- Phase 2: warm restore to run hello-world --------------------
         log.info("snapshot smoke test: warm-restoring to run hello-world")
-        mount_dir = Path(tempfile.mkdtemp(prefix="nanvix-snap-smoke-"))
+        mount_dir = self._temporary_directory("nanvix-snap-smoke-")
         (mount_dir / "bootstrap.py").write_text('print("hello")\n')
         run_log = tmp / "snapshot-run.log"
         run_cmd = [
@@ -363,26 +362,12 @@ class TestMixin(LibMixin):
         test_end = int(os.environ.get("TEST_END", "999"))
         excluded: set[str] = set(exclude_tests.split()) if exclude_tests else set()
 
-        # Precompile stdlib and tests
-        host_python = self._host_python()
-        if host_python:
-            subprocess.run(
-                [
-                    host_python,
-                    "-m",
-                    "compileall",
-                    "-q",
-                    str(sysroot / "lib" / "python3.12"),
-                ],
-                capture_output=True,
-            )
-            for t in sysroot.glob("test_*.py"):
-                subprocess.run(
-                    [host_python, "-m", "py_compile", str(t)],
-                    capture_output=True,
-                )
+        # Standalone tests consume the bytecode-only ramfs produced by build.
+        # Other modes need an opt-0 cache beside the source tree.
+        if self.config.deployment_mode != "standalone":
+            self._precompile_pyc(sysroot, legacy=False, strip_sources=False)
 
-        tmp = Path(tempfile.gettempdir())
+        tmp = self._log_directory()
         total_pass = 0
         total_fail = 0
         total_skip = 0

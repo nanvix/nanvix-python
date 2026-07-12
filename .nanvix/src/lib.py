@@ -17,13 +17,15 @@ import sys
 import tempfile
 from pathlib import Path
 
-from nanvix_zutil import CFG_SYSROOT, TOOLCHAIN_CONTAINER_PATH, ZScript, log
+from nanvix_zutil import CFG_SYSROOT, ZScript, log
 from nanvix_zutil.exitcodes import EXIT_MISSING_DEP
+from nanvix_zutil.paths import test_out
 
 __all__ = (
     "DEFAULT_TIMEOUT",
     "IS_WINDOWS",
     "LibMixin",
+    "SDK_IMAGE",
     "mkramfs_binary",
     "nanvixd_binary",
 )
@@ -32,6 +34,11 @@ __all__ = (
 DEFAULT_TIMEOUT = 300
 
 IS_WINDOWS = sys.platform == "win32"
+
+SDK_IMAGE = (
+    "ghcr.io/nanvix/nanvix-sdk-c-clang"
+    "@sha256:f61737cb0780e6a2058c6d0bdf8ae5562db18de437173b2bcbbe6973abd3689f"
+)
 
 
 def nanvixd_binary() -> str:
@@ -46,6 +53,20 @@ def mkramfs_binary() -> str:
 
 class LibMixin(ZScript):
     """Shared state + helpers for nanvix-python lifecycle mixins."""
+
+    # The downloaded sysroot is runtime-only. Build-time headers, libraries,
+    # startup objects, and linker scripts live exclusively in the SDK.
+    SYSROOT_REQUIRED_FILES: tuple[str, ...] = (
+        "bin/nanvixd.elf",
+        "bin/kernel.elf",
+        "bin/mkramfs.elf",
+    )
+    SYSROOT_REQUIRED_FILES_WINDOWS: tuple[str, ...] = (
+        "bin/nanvixd.exe",
+        "bin/kernel.elf",
+        "bin/mkramfs.exe",
+    )
+    SYSROOT_MULTI_PROCESS_FILES: tuple[str, ...] = ()
 
     # Standalone / ramfs artefacts shared across build and test stages.
     _ramfs_img: Path | None = None
@@ -62,17 +83,19 @@ class LibMixin(ZScript):
             )
         return Path(sysroot)
 
-    def _toolchain_str(self) -> str:
-        return str(TOOLCHAIN_CONTAINER_PATH)
+    @staticmethod
+    def _temporary_directory(prefix: str) -> Path:
+        """Create a temporary directory under the ignored test output."""
+        temp_root = test_out() / "temp"
+        temp_root.mkdir(parents=True, exist_ok=True)
+        return Path(tempfile.mkdtemp(prefix=prefix, dir=temp_root))
 
-    def _host_python(self) -> str | None:
-        toolchain_python = Path(self._toolchain_str()) / "bin" / "python3"
-        if toolchain_python.is_file():
-            return str(toolchain_python)
-        for name in ("python3", "python"):
-            if shutil.which(name):
-                return name
-        return None
+    @staticmethod
+    def _log_directory() -> Path:
+        """Return the ignored directory used for transient command logs."""
+        logs = test_out() / "logs"
+        logs.mkdir(parents=True, exist_ok=True)
+        return logs
 
     def _nanvix_run(
         self,
@@ -97,7 +120,7 @@ class LibMixin(ZScript):
                     hint="Run `./z build` first.",
                 )
             initrd = self._ensure_initrd(sysroot)
-            mount_dir = Path(tempfile.mkdtemp(prefix="nanvix-mount-"))
+            mount_dir = self._temporary_directory("nanvix-mount-")
             (mount_dir / "argv.txt").write_text(f"/sysroot/{script_path}\n")
             cmd = [
                 nanvixd,
@@ -190,4 +213,13 @@ class LibMixin(ZScript):
         raise NotImplementedError
 
     def _stage_test_scripts(self, sysroot: Path) -> None:  # pragma: no cover
+        raise NotImplementedError
+
+    def _precompile_pyc(
+        self,
+        pylib: Path,
+        *,
+        legacy: bool = True,
+        strip_sources: bool = True,
+    ) -> None:  # pragma: no cover
         raise NotImplementedError

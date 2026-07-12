@@ -10,21 +10,21 @@ workflow, following the same pattern used by all `usr/` packages.
 
 1. **Get Nanvix Info** — resolves sysroot metadata via `nanvix-zutil resolve`.
 2. **Build** (matrix) — runs `./z setup` → `./z build` → `./z test` → `./z release`
-   for each platform/process-mode combination.
+   for microvm standalone at 256 MB.
 3. **Release** — collects build artifacts, generates a lockfile, and creates
    a GitHub release tagged `{version}-nanvix-{nanvix_version}`.
 4. **Report Failure** — opens a GitHub issue on scheduled-run failures.
 
 ## Platform Matrix
 
-The CI matrix tests every combination of platform and process mode:
+The runtime release matrix contains one supported configuration:
 
-| Platform     | Process Mode     | Status       |
-| ------------ | ---------------- | ------------ |
-| `hyperlight` | `multi-process`  | Tested in CI |
-| `hyperlight` | `single-process` | Tested in CI |
-| `microvm`    | `multi-process`  | Tested in CI |
-| `microvm`    | `single-process` | Tested in CI |
+| Platform  | Process Mode | Memory | Status       |
+| --------- | ------------ | ------ | ------------ |
+| `microvm` | `standalone` | 256 MB | Tested in CI |
+
+Linux builds bytecode with the content-addressed `nanvix-sdk-c-clang` image.
+Windows tests consume the resulting bytecode-only ramfs.
 
 ## Triggers
 

@@ -36,15 +36,17 @@ that can run Python scripts on any Linux host with KVM support.
 ./z release
 ```
 
-This writes artifacts to `./release-assets/` (override with
-`RELEASE_DIR`).
+This writes Linux `.tar.gz` and Windows `.zip` artifacts to `./dist/`.
 
 ## Bundle Contents
 
 ```text
-<platform>-<mode>/
-  bin/              # nanvixd.elf, kernel.elf, linuxd.elf, uservm.elf, python3.12
-  lib/              # Python standard library, site-packages, user.ld
+microvm-standalone-256mb/
+  bin/              # nanvixd host binary, kernel.elf, python3.12
+  lib/              # Python standard library and site-packages
+  mnt/              # User workloads
+  nanvix_rootfs.img # Bytecode-only Python stdlib and site-packages
+  python3.initrd    # Daemons and CPython interpreter
   README.md         # Usage instructions
 ```
 
@@ -56,12 +58,12 @@ to avoid runtime file-creation issues
 ## Running from a Bundle
 
 ```bash
-tar -xjf release-assets/hyperlight-multi-process.tar.bz2
-cd hyperlight-multi-process
+tar -xzf dist/microvm-standalone-256mb.tar.gz
+cd microvm-standalone-256mb
 
-# Run a script
-echo 'import numpy; print(numpy.__version__)' > test.py
-./bin/nanvixd.elf -- ./bin/python3.12 test.py
+# Run a script through the cold-start path
+echo 'print("Hello from Nanvix!")' > mnt/bootstrap.py
+./bin/nanvixd.elf -ramfs nanvix_rootfs.img -mount ./mnt -- python3.initrd
 ```
 
 > **Note:** The `-c` flag only works with code that contains no spaces

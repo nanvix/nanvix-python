@@ -8,7 +8,6 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-import tempfile
 import time
 from pathlib import Path
 
@@ -56,7 +55,7 @@ class BenchmarkMixin(LibMixin):
             initrd = self._ensure_initrd(sysroot)
 
             # Create a temp mount directory with a hello-world bootstrap.py
-            mount_dir = Path(tempfile.mkdtemp(prefix="nanvix-bench-"))
+            mount_dir = self._temporary_directory("nanvix-bench-")
             (mount_dir / "bootstrap.py").write_text('print("hello")\n')
             cmd = [
                 nanvixd_bin,
@@ -77,7 +76,7 @@ class BenchmarkMixin(LibMixin):
                 '-c print("hello")',
             ]
 
-        tmp = Path(tempfile.gettempdir())
+        tmp = self._log_directory()
         log_file = tmp / "benchmark.log"
 
         log.info("running benchmark: hello world")

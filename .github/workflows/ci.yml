@@ -41,7 +41,7 @@ jobs:
       yaml-paths: ".github/workflows/ci.yml"
       release-notes-extra: |
         CPython 3.12.3 distribution for Nanvix with pure Python pip packages.
-      docker-image: "ghcr.io/nanvix/toolchain-python@sha256:2ef7213bfff85e927f18d8f0fc53063b9c6ffed236a6b30c92f6b4e148c2dec4" # yamllint disable-line rule:line-length
+      docker-image: "ghcr.io/nanvix/nanvix-sdk-c-clang@sha256:f61737cb0780e6a2058c6d0bdf8ae5562db18de437173b2bcbbe6973abd3689f" # yamllint disable-line rule:line-length
       test-output-globs: '["nanvix_rootfs.img"]'
     secrets:
       GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
