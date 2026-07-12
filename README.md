@@ -135,7 +135,7 @@ auto-bootstraps [nanvix-zutil](https://github.com/nanvix/zutils).
 ### Prerequisites
 
 - **Python 3.12+** on the host
-- **Docker** (for cross-compilation and `.pyc` pre-compilation)
+- **Docker** (for SDK-hosted Python 3.12 bytecode generation)
 - **KVM** (`/dev/kvm`) on Linux for running Nanvix guests
 
 ### Build, Test, and Release
@@ -144,7 +144,9 @@ auto-bootstraps [nanvix-zutil](https://github.com/nanvix/zutils).
 git clone https://github.com/nanvix/nanvix-python.git
 cd nanvix-python
 
-./z setup      # Download Nanvix sysroot and pre-built CPython
+# Download the runtime-only sysroot and SDK-built CPython.
+./z setup --with-docker \
+  ghcr.io/nanvix/nanvix-sdk-c-clang@sha256:f61737cb0780e6a2058c6d0bdf8ae5562db18de437173b2bcbbe6973abd3689f
 ./z build      # Install pip packages and generate ramfs image
 ./z test       # Run smoke test and functional tests
 ./z release    # Package standalone runtime bundle into dist/

@@ -4,7 +4,7 @@
 """Build lifecycle for the nanvix-python ZScript.
 
 Owns ramfs/initrd construction, site-packages installation, the PIL shim,
-the openpyxl lxml patch, and the standalone-mode Docker-based .pyc
+the openpyxl lxml patch, and the standalone-mode SDK-based .pyc
 pre-compilation pipeline.
 """
 
@@ -24,7 +24,7 @@ from nanvix_zutil.exitcodes import EXIT_BUILD_FAILURE, EXIT_MISSING_DEP
 from nanvix_zutil.helpers import InitRdArgs
 from nanvix_zutil.paths import nanvix_root, repo_root, test_out
 
-from .lib import LibMixin, mkramfs_binary, nanvixd_binary
+from .lib import SDK_IMAGE, LibMixin, mkramfs_binary, nanvixd_binary
 
 
 class BuildMixin(LibMixin):
@@ -84,7 +84,7 @@ class BuildMixin(LibMixin):
         """Validate that an up-to-date ramfs image exists.
 
         Used by ``test``, ``release``, and ``benchmark``: never builds. Building
-        the ramfs requires Docker (for .pyc pre-compilation) and is therefore
+        the ramfs requires the SDK (for .pyc pre-compilation) and is therefore
         confined to ``./z build`` via :meth:`_build_ramfs`. A missing or stale
         image is fatal. In CI, this short-circuits if the expected ramfs image
         is found.
@@ -111,7 +111,7 @@ class BuildMixin(LibMixin):
             log.fatal(
                 "ramfs image missing or stale.",
                 code=EXIT_MISSING_DEP,
-                hint="Run `./z build` first (requires Docker).",
+                hint="Run `./z build` first (requires Docker and the pinned SDK).",
             )
 
         self._ramfs_img = img
@@ -120,7 +120,7 @@ class BuildMixin(LibMixin):
     def _build_ramfs(self, sysroot: Path) -> Path:
         """Build (or reuse) a ramfs image for standalone mode.
 
-        Only ``./z build`` may call this: it invokes Docker via
+        Only ``./z build`` may call this: it invokes the SDK via
         :meth:`_precompile_pyc` and is the sole producer of the ramfs.
         """
         if self._ramfs_img and self._ramfs_img.is_file():
@@ -154,7 +154,7 @@ class BuildMixin(LibMixin):
             shutil.copy2(src, stripped_root)
 
         # _boot.pyc is compiled inside _create_stripped_sysroot via
-        # Docker (Python 3.12) and placed at the sysroot root.
+        # the SDK's host Python 3.12 and placed at the sysroot root.
 
         # Generate build manifests for post-build inspection
         self._write_build_manifests(sysroot, stripped, nanvix_root())
@@ -314,7 +314,7 @@ class BuildMixin(LibMixin):
 
         # Remove native/build source from site-packages
         for ext in ("*.pyx", "*.pxd", "*.c", "*.h", "*.cpp"):
-            for f in site_pkg.rglob(ext):
+            for f in pylib.rglob(ext):
                 f.unlink(missing_ok=True)
 
         # Remove non-Python assets that are dead weight at runtime
@@ -343,7 +343,7 @@ class BuildMixin(LibMixin):
                 for f in docutils_pkg.rglob(ext):
                     f.unlink(missing_ok=True)
 
-        # Pre-compile .py → .pyc using Docker toolchain (Python 3.12)
+        # Pre-compile .py → .pyc using the SDK host Python 3.12
         # then strip .py sources so ramfs ships only bytecode.
         #
         # Place _boot.py inside pylib so it's compiled with the correct
@@ -367,22 +367,22 @@ class BuildMixin(LibMixin):
         if boot_pyc_in_pylib.is_file():
             shutil.move(str(boot_pyc_in_pylib), str(root / "_boot.pyc"))
 
-    def _precompile_pyc(self, pylib: Path) -> None:
-        """Pre-compile .py to .pyc using Docker toolchain's Python 3.12.
+    def _precompile_pyc(
+        self,
+        pylib: Path,
+        *,
+        legacy: bool = True,
+        strip_sources: bool = True,
+    ) -> None:
+        """Pre-compile .py to .pyc using the pinned SDK's host Python 3.12.
 
-        Uses ``compileall -b`` to write .pyc alongside sources, then
-        removes .py files.  To avoid slow volume-mount I/O on Windows,
-        the directory is tarred into the container and extracted back.
+        The directory is tarred into the container and extracted back to
+        avoid slow volume-mount I/O on Windows.
 
-        Hard-fails if Docker is unavailable: the standalone ramfs ships
-        .pyc-only contents (including ``/sysroot/_boot.pyc``), so a
-        Docker-less build would produce an unusable image.  This is
-        only reachable from ``./z build`` via :meth:`_build_ramfs`;
-        ``test``/``release``/``benchmark`` go through
-        :meth:`_ensure_ramfs` and never reach here.
+        Hard-fails if Docker is unavailable. The standalone ramfs ships
+        sourceless bytecode, while release bundles retain sources alongside
+        an opt-0 bytecode cache.
         """
-        _DOCKER_IMAGE = "ghcr.io/nanvix/toolchain-python:latest"
-
         if shutil.which("docker") is None:
             log.fatal(
                 "Docker is required to build the standalone ramfs "
@@ -391,14 +391,20 @@ class BuildMixin(LibMixin):
                 hint="Install Docker and rerun `./z build`.",
             )
 
-        log.info("pre-compiling .py to .pyc via Docker (Python 3.12)")
+        log.info("pre-compiling .py to .pyc with SDK host Python 3.12")
 
-        container_work = "/tmp/pylib"
+        container_work = "/work/pylib"
+        compile_flags = "-b " if legacy else ""
+        delete_sources = (
+            f"find {container_work} -name '*.py' -delete && " if strip_sources else ""
+        )
+        optimize = "-O " if strip_sources else ""
         script = (
             f"mkdir -p {container_work} && "
             f"tar -xf - -C {container_work} && "
-            f"python3 -O -m compileall -b -q {container_work} && "
-            f"find {container_work} -name '*.py' -delete && "
+            f"/usr/bin/python3 {optimize}-m compileall "
+            f"{compile_flags}-q {container_work} && "
+            f"{delete_sources}"
             f"tar -cf - -C {container_work} ."
         )
 
@@ -416,7 +422,7 @@ class BuildMixin(LibMixin):
             "run",
             "--rm",
             "-i",
-            _DOCKER_IMAGE,
+            SDK_IMAGE,
             "sh",
             "-c",
             script,
@@ -428,7 +434,7 @@ class BuildMixin(LibMixin):
         )
         if result.returncode != 0:
             log.fatal(
-                "Docker compileall failed (rc="
+                "SDK compileall failed (rc="
                 f"{result.returncode}): {result.stderr.decode(errors='replace').strip()}",
                 code=EXIT_BUILD_FAILURE,
                 hint="Inspect the Docker output above and rerun `./z build`.",
@@ -443,15 +449,16 @@ class BuildMixin(LibMixin):
 
         # Validate that the entry-point bytecode was produced; without
         # it the standalone initrd cannot warm-start.
-        if not (pylib / "_boot.pyc").is_file():
+        if legacy and strip_sources and not (pylib / "_boot.pyc").is_file():
             log.fatal(
-                "Docker compileall did not produce _boot.pyc",
+                "SDK compileall did not produce _boot.pyc",
                 code=EXIT_BUILD_FAILURE,
                 hint="Inspect the Docker output above and rerun `./z build`.",
             )
 
         count = sum(1 for _ in pylib.rglob("*.pyc"))
-        log.info(f"pre-compiled {count} .pyc files (source .py removed)")
+        suffix = " (source .py removed)" if strip_sources else ""
+        log.info(f"pre-compiled {count} .pyc files{suffix}")
 
     def _cleanup_ramfs(self) -> None:
         """Remove intermediate ramfs build artifacts (keeps cached image)."""
@@ -549,6 +556,7 @@ class BuildMixin(LibMixin):
         req_hash = h.hexdigest()
 
         if sentinel.is_file() and sentinel.read_text().strip() == req_hash:
+            self._remove_site_package_build_artifacts(site_pkg)
             log.info("site-packages already up-to-date, skipping pip install")
             return
 
@@ -574,7 +582,15 @@ class BuildMixin(LibMixin):
         pth = site_pkg / "distutils-precedence.pth"
         pth.unlink(missing_ok=True)
 
+        self._remove_site_package_build_artifacts(site_pkg)
         sentinel.write_text(req_hash)
+
+    @staticmethod
+    def _remove_site_package_build_artifacts(site_pkg: Path) -> None:
+        """Remove native build inputs that are not usable at runtime."""
+        for pattern in ("*.a", "*.c", "*.cpp", "*.h", "*.pxd", "*.pyx"):
+            for path in site_pkg.rglob(pattern):
+                path.unlink(missing_ok=True)
 
     def _install_pil_shim(self, site_pkg: Path) -> None:
         """Copy the pure-Python PIL shim into site-packages.
@@ -675,11 +691,6 @@ class BuildMixin(LibMixin):
         if pylib.is_dir():
             shutil.copytree(pylib, lib_dir / "python3.12")
 
-        # Linker script
-        user_ld = sysroot / "lib" / "user.ld"
-        if user_ld.is_file():
-            shutil.copy2(user_ld, lib_dir)
-
         # Clean build/test artifacts from bundle
         log.info("release: cleaning build and test artifacts")
         for p in bundle_dir.glob("test_*.py"):
@@ -693,12 +704,11 @@ class BuildMixin(LibMixin):
 
         # Precompile .py to .pyc
         log.info("release: pre-compiling .pyc bytecode cache")
-        host_python = self._host_python()
-        if host_python:
-            subprocess.run(
-                [host_python, "-m", "compileall", "-q", str(lib_dir / "python3.12")],
-                capture_output=True,
-            )
+        self._precompile_pyc(
+            lib_dir / "python3.12",
+            legacy=False,
+            strip_sources=False,
+        )
 
         # Build and include ramfs image for standalone mode
         if mode == "standalone":

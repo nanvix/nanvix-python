@@ -5,94 +5,185 @@
 
 from __future__ import annotations
 
+import shutil
 import tarfile
-from pathlib import Path
+import zipfile
+from pathlib import Path, PurePosixPath
 
-from nanvix_zutil import log
-from nanvix_zutil.github import download_release_asset, resolve_release
+from nanvix_zutil import Dependency, log
+from nanvix_zutil.exitcodes import EXIT_MISSING_DEP
 from nanvix_zutil.paths import nanvix_root
 
 from .lib import LibMixin
 
 
 class SetupMixin(LibMixin):
-    """``./z setup`` — download sysroot and pre-built CPython buildroot."""
+    """``./z setup`` — download the runtime and pre-built CPython."""
 
     def setup(self) -> bool:
-        """Download sysroot and pre-built CPython buildroot.
+        """Download the sysroot and pre-built CPython.
 
         The base ``super().setup()`` downloads the Nanvix sysroot and
-        resolves dependencies declared in ``nanvix.toml``. Then we
-        download the pre-built CPython release artifact and extract the
-        interpreter binary and standard library into the sysroot.
+        resolves and caches dependencies declared in ``nanvix.toml``. Then
+        we reuse the cached CPython runtime artifact and extract only the
+        interpreter binary and standard library into the runtime sysroot.
         """
+        dependency = self._cpython_dependency()
+        # Include the extension so prefix matching cannot select either the
+        # similarly named buildroot archive or the Windows delivery bundle
+        # (which contains a ready-made ramfs rather than an extractable stdlib).
+        dependency.artifact_pattern = "{name}-{machine}-{mode}-{mem}.tar.gz"
         result = super().setup()
 
         sysroot = self._sysroot_path()
-        self._install_cpython(sysroot)
+        self._install_cpython(sysroot, dependency)
 
         log.success("setup complete")
         return result
 
-    def _install_cpython(self, sysroot: Path) -> None:
-        """Download and extract the pre-built CPython artifact into sysroot."""
-        machine = self.config.machine
-        mode = self.config.deployment_mode
-        memory = self.config.memory_size
+    def _cpython_dependency(self) -> Dependency:
+        """Return the CPython dependency parsed and resolved by zutils."""
+        dependency = next(
+            (dep for dep in self.manifest.dependencies if dep.name == "cpython"),
+            None,
+        )
+        if dependency is None:
+            log.fatal(
+                "cpython is not declared in nanvix.toml.",
+                code=EXIT_MISSING_DEP,
+            )
+        return dependency
 
-        # Resolve the cpython version (suffixed with nanvix sysroot version)
-        cpython_version = self.manifest.version
-        sysroot_tag = self.config.get("sysroot_tag", "")
-        nanvix_ver = sysroot_tag.removeprefix("v") if sysroot_tag else ""
-        if sysroot_tag:
-            version_specifier = f"{cpython_version}-nanvix-{nanvix_ver}"
-        else:
-            version_specifier = cpython_version
-
-        asset_name = f"cpython-{machine}-{mode}-{memory}.tar.gz"
+    def _cached_cpython_artifact(self, dependency: Dependency) -> Path:
+        """Return the CPython runtime artifact downloaded by base setup."""
+        prefix = dependency.artifact_pattern.format(
+            name=dependency.name,
+            machine=self.config.machine,
+            mode=self.config.deployment_mode,
+            mem=self.config.memory_size,
+        )
         cache_dir = nanvix_root() / "cache"
+        candidates = [
+            path
+            for path in cache_dir.iterdir()
+            if path.is_file()
+            and path.name.startswith(prefix)
+            and path.name.endswith((".tar.bz2", ".tar.gz", ".zip"))
+        ]
+        if not candidates:
+            log.fatal(
+                f"base setup did not cache a CPython artifact matching '{prefix}'.",
+                code=EXIT_MISSING_DEP,
+                hint="Run `./z setup` again and inspect the dependency download.",
+            )
+        candidates.sort(
+            key=lambda path: (path.stat().st_mtime, path.name),
+            reverse=True,
+        )
+        return candidates[0]
+
+    @staticmethod
+    def _cpython_destination(member_name: str, sysroot: Path) -> Path | None:
+        """Map a safe CPython archive member to its runtime destination."""
+        member_path = PurePosixPath(member_name.replace("\\", "/"))
+        if member_path.is_absolute() or ".." in member_path.parts:
+            return None
+        parts = member_path.parts
+
+        for index in range(len(parts) - 1):
+            if parts[index] == "bin" and parts[index + 1] in (
+                "python.elf",
+                "python3.12",
+            ):
+                if index + 2 == len(parts):
+                    return sysroot / "bin" / "python3.12"
+
+        for index in range(len(parts) - 1):
+            if parts[index : index + 2] == ("lib", "python3.12"):
+                relative = Path(*parts[index:])
+                destination = (sysroot / relative).resolve()
+                if destination.is_relative_to(sysroot.resolve()):
+                    return destination
+        return None
+
+    def _extract_cpython_tar(self, artifact: Path, sysroot: Path) -> None:
+        """Safely extract CPython runtime files from a tar archive."""
+        with tarfile.open(artifact, "r:*") as archive:
+            for member in archive.getmembers():
+                if not member.isfile():
+                    continue
+                destination = self._cpython_destination(member.name, sysroot)
+                if destination is None:
+                    continue
+                source = archive.extractfile(member)
+                if source is None:
+                    continue
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with source, destination.open("wb") as output:
+                    shutil.copyfileobj(source, output)
+                destination.chmod(member.mode & 0o777)
+
+    def _extract_cpython_zip(self, artifact: Path, sysroot: Path) -> None:
+        """Safely extract CPython runtime files from a zip archive."""
+        with zipfile.ZipFile(artifact) as archive:
+            for member in archive.infolist():
+                if member.is_dir():
+                    continue
+                destination = self._cpython_destination(member.filename, sysroot)
+                if destination is None:
+                    continue
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(member) as source, destination.open("wb") as output:
+                    shutil.copyfileobj(source, output)
+                mode = (member.external_attr >> 16) & 0o777
+                if mode:
+                    destination.chmod(mode)
+
+    def _install_cpython(self, sysroot: Path, dependency: Dependency) -> None:
+        """Extract the base-setup CPython artifact into the runtime sysroot."""
+        version = str(dependency.ref.value)
 
         sentinel = sysroot / ".cpython-installed"
-        if sentinel.is_file() and sentinel.read_text().strip() == version_specifier:
+        python = sysroot / "bin" / "python3.12"
+        stdlib = sysroot / "lib" / "python3.12"
+        if (
+            sentinel.is_file()
+            and sentinel.read_text().strip() == version
+            and python.is_file()
+            and (stdlib / "os.py").is_file()
+        ):
+            self._remove_stdlib_build_artifacts(stdlib)
             log.info("CPython already installed, skipping")
             return
 
-        log.info(f"downloading pre-built CPython ({asset_name})")
+        artifact = self._cached_cpython_artifact(dependency)
+        log.info(f"extracting CPython from cached {artifact.name}")
+        python.unlink(missing_ok=True)
+        if stdlib.is_dir():
+            shutil.rmtree(stdlib)
+        if zipfile.is_zipfile(artifact):
+            self._extract_cpython_zip(artifact, sysroot)
+        else:
+            self._extract_cpython_tar(artifact, sysroot)
 
-        release = resolve_release(
-            repo="nanvix/cpython",
-            version_specifier=version_specifier,
-            gh_token=self.config.get("GH_TOKEN"),
-        )
+        missing = [
+            str(path.relative_to(sysroot))
+            for path in (python, stdlib / "os.py", stdlib / "site.py")
+            if not path.is_file()
+        ]
+        if missing:
+            log.fatal(
+                "CPython artifact is missing runtime files: " + ", ".join(missing),
+                code=EXIT_MISSING_DEP,
+            )
 
-        asset_path = download_release_asset(
-            repo="nanvix/cpython",
-            version_specifier=version_specifier,
-            asset_name=asset_name,
-            dest=cache_dir,
-            gh_token=self.config.get("GH_TOKEN"),
-            _release=release,
-        )
-
-        log.info("extracting CPython into sysroot")
-        with tarfile.open(asset_path, "r:*") as tf:
-            for member in tf.getmembers():
-                if not member.isfile():
-                    continue
-
-                # Tolerate both the legacy layout (entries rooted under
-                # ``sysroot/``) and the post-nanvix/cpython#742 layout
-                # where the ``sysroot/`` prefix has been dropped.
-                name = member.name.removeprefix("sysroot/")
-
-                # bin/python.elf → sysroot/bin/python3.12
-                if name == "bin/python.elf":
-                    member.name = "bin/python3.12"
-                    tf.extract(member, path=sysroot, filter="data")
-                # lib/python3.12/* → sysroot/lib/python3.12/*
-                elif name.startswith("lib/python3.12/"):
-                    member.name = name
-                    tf.extract(member, path=sysroot, filter="data")
-
-        sentinel.write_text(version_specifier)
+        self._remove_stdlib_build_artifacts(stdlib)
+        sentinel.write_text(version)
         log.success("CPython installed into sysroot")
+
+    @staticmethod
+    def _remove_stdlib_build_artifacts(stdlib: Path) -> None:
+        """Remove SDK build inputs that are not part of the Python runtime."""
+        for pattern in ("*.a", "*.c", "*.cpp", "*.h", "*.pxd", "*.pyx"):
+            for path in stdlib.rglob(pattern):
+                path.unlink(missing_ok=True)

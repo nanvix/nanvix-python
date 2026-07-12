@@ -1,19 +1,18 @@
 # Building from Source
 
-This guide covers building the Nanvix Python runtime from source, including cross-compiling
-CPython 3.12 with pure Python pip packages.
+This guide covers assembling the Nanvix Python runtime from the SDK-built
+CPython 3.12 release and pure Python pip packages.
 
 ## Prerequisites
 
-| Requirement            | Notes                                                           |
-| ---------------------- | --------------------------------------------------------------- |
-| **Linux x86-64 host**  | Build scripts assume a Linux environment (or Docker on Windows) |
-| **Nanvix toolchain**   | `ghcr.io/nanvix/toolchain-python:latest` Docker image or `/opt/nanvix` |
-| **Python 3.12+**       | Host Python for nanvix-zutil and build orchestration            |
-| **nanvix-zutil**       | Auto-bootstrapped by `./z` wrapper scripts                     |
-| **Docker** (optional)  | Used automatically when a native toolchain is not available     |
-| **KVM** (`/dev/kvm`)   | Required to run Nanvix guests during testing                    |
-| **git**                | Submodule management                                            |
+| Requirement            | Notes                                                               |
+| ---------------------- | ------------------------------------------------------------------- |
+| **Linux x86-64 host**  | Full build/test support; Windows 11 uses the PowerShell flow         |
+| **Nanvix SDK**         | Pinned `nanvix-sdk-c-clang` image shown below                        |
+| **Python 3.12+**       | Host Python for nanvix-zutil and build orchestration                |
+| **nanvix-zutil**       | Auto-bootstrapped by `./z` wrapper scripts                          |
+| **Docker**             | Runs SDK host Python 3.12 for deterministic bytecode generation     |
+| **KVM** (`/dev/kvm`)   | Required to run Nanvix guests during Linux testing                  |
 
 ## Commands
 
@@ -21,8 +20,8 @@ All interaction is through the `./z` build script:
 
 | Command       | Description                                                                                                                                                  |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `./z setup`   | Download the Nanvix sysroot and build dependencies via nanvix-zutil and initialise git submodules.                                                           |
-| `./z build`   | Cross-compile CPython 3.12 with built-in modules and install pure Python packages into the sysroot.                                                          |
+| `./z setup`   | Download the Nanvix 0.20.0 runtime-only sysroot and exact SDK-built CPython 3.12.3 dependency.                                                               |
+| `./z build`   | Install pure Python packages and generate Python 3.12 bytecode and the standalone ramfs.                                                                      |
 | `./z test`    | Install pip site-packages, run the smoke test (built-in modules), then run functional tests on `nanvixd.elf`.                                                |
 | `./z release` | Package the sysroot into a standalone runtime tarball under `./dist/`.                                                                                       |
 | `./z clean`   | Remove all build artifacts, the sysroot, work directory, and release assets.                                                                                 |
@@ -34,10 +33,11 @@ All interaction is through the `./z` build script:
 git clone --recurse-submodules https://github.com/nanvix/nanvix-python.git
 cd nanvix-python
 
-# 2. Download the Nanvix runtime, init submodules, fetch build deps
-./z setup
+# 2. Download the runtime and exact SDK-built CPython dependency
+./z setup --with-docker \
+  ghcr.io/nanvix/nanvix-sdk-c-clang@sha256:f61737cb0780e6a2058c6d0bdf8ae5562db18de437173b2bcbbe6973abd3689f
 
-# 3. Cross-compile CPython with built-in modules
+# 3. Install packages and generate the bytecode-only ramfs
 ./z build
 
 # 4. Install pip packages and run all tests
@@ -52,33 +52,22 @@ cd nanvix-python
 On Windows, use the PowerShell wrapper:
 
 ```powershell
-.\z.ps1 setup
-.\z.ps1 build   # requires Docker
-.\z.ps1 test    # requires Docker + KVM
-```
-
-### Selecting a Platform
-
-Set `NANVIX_MACHINE` and `NANVIX_DEPLOYMENT_MODE` before running:
-
-```bash
-export NANVIX_MACHINE=microvm
-export NANVIX_DEPLOYMENT_MODE=single-process
-./z setup && ./z build && ./z test
+.\z.ps1 setup --with-docker ghcr.io/nanvix/nanvix-sdk-c-clang@sha256:f61737cb0780e6a2058c6d0bdf8ae5562db18de437173b2bcbbe6973abd3689f
+.\z.ps1 build
+.\z.ps1 test
 ```
 
 ## Environment Variables
 
-| Variable                  | Default            | Description                                        |
-| ------------------------- | ------------------ | -------------------------------------------------- |
-| `NANVIX_MACHINE`          | `hyperlight`       | Target platform (`hyperlight` or `microvm`)        |
-| `NANVIX_DEPLOYMENT_MODE`  | `multi-process`    | Process mode (`multi-process` or `single-process`) |
-| `NANVIX_MEMORY_SIZE`      | `128mb`            | Memory size for the sysroot                        |
-| `NANVIX_TOOLCHAIN`        | `/opt/nanvix`      | Path to the Nanvix cross-compilation toolchain     |
-| `TEST_START`              | `1`                | First test number to run (inclusive)               |
-| `TEST_END`                | `999`              | Last test number to run (inclusive)                |
-| `TIMEOUT_SECONDS`         | `300`              | Per-test timeout in seconds                        |
-| `GH_TOKEN`                | —                  | GitHub token for authenticated API calls (CI)      |
+| Variable                  | Default      | Description                                   |
+| ------------------------- | ------------ | --------------------------------------------- |
+| `NANVIX_MACHINE`          | `microvm`    | Runtime platform (only `microvm` is supported) |
+| `NANVIX_DEPLOYMENT_MODE`  | `standalone` | Runtime mode (only `standalone` is supported) |
+| `NANVIX_MEMORY_SIZE`      | `256mb`      | Runtime memory size                           |
+| `TEST_START`              | `1`          | First test number to run (inclusive)          |
+| `TEST_END`                | `999`        | Last test number to run (inclusive)           |
+| `TIMEOUT_SECONDS`         | `300`        | Per-test timeout in seconds                   |
+| `GH_TOKEN`                | —            | GitHub token for authenticated API calls      |
 
 ## Project Layout
 
@@ -90,9 +79,6 @@ nanvix-python/
 ├── .nanvix/
 │   ├── nanvix.toml          # Package manifest (name, version, dependencies)
 │   └── z.py                 # Build script (ZScript subclass)
-├── deps/                    # Git submodules
-│   ├── cpython/             # CPython 3.12.3 (Nanvix fork)
-│   └── libexpat/            # libexpat 2.6.4
 ├── patches/                 # Build documentation
 ├── requirements/            # Pip package lists (base + extra)
 ├── tests/

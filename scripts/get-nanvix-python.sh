@@ -356,10 +356,10 @@ main() {
     echo ""
     info "Quick start:"
     info "  cd $output_dir"
-    info "  tar -xjf hyperlight-multi-process.tar.bz2"
-    info "  cd hyperlight-multi-process"
-    info "  echo \"print('Hello from Nanvix!')\" > hello.py"
-    info "  ./bin/nanvixd.elf -- ./bin/python3.12 hello.py"
+    info "  tar -xzf microvm-standalone-256mb.tar.gz"
+    info "  cd microvm-standalone-256mb"
+    info "  echo \"print('Hello from Nanvix!')\" > mnt/bootstrap.py"
+    info "  ./bin/nanvixd.elf -ramfs nanvix_rootfs.img -mount ./mnt -- python3.initrd"
 }
 
 # Run main function.

@@ -3,16 +3,13 @@
 Contributions are welcome! To get started:
 
 1. Fork the repository and create a feature branch.
-2. Run `./z setup && ./z build && ./z test` to verify your changes
-   locally.
-3. If adding a new statically linked C extension, add a documentation
-   file in `patches/` following the existing `*_static_builtin.md`
-   pattern.
-4. If adding a new pip package, append it to the appropriate
+2. Run the SDK setup command from [building.md](building.md), then
+   `./z build && ./z test` to verify your changes locally.
+3. If adding a new pip package, append it to the appropriate
    requirements file and create a matching
    `tests/func/test_NNN_<package>.py` test file.
-5. Open a pull request — CI will automatically build and test all four
-   platform configurations.
+4. Open a pull request — CI builds and tests microvm standalone at 256 MB
+   on Linux and Windows.
 
 ## Further Reading
 
