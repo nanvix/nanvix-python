@@ -11,3 +11,10 @@ memory = ["256mb"]
 
 [dependencies]
 cpython = "3.12.3"
+
+[toolchain]
+kind = "nanvix-sdk"
+provider = "c-clang"
+sdk-version = "v0.20.0-sdk.2"
+sdk-image = "ghcr.io/nanvix/nanvix-sdk-c-clang"
+sdk-digest = "sha256:880ed7e6a20fe9bf2536b1b3ba9bdbbd067a48f043ec9131d3dd398c65f11f35"
