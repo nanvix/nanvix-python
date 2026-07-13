@@ -25,7 +25,6 @@ __all__ = (
     "DEFAULT_TIMEOUT",
     "IS_WINDOWS",
     "LibMixin",
-    "SDK_IMAGE",
     "mkramfs_binary",
     "nanvixd_binary",
 )
@@ -34,12 +33,6 @@ __all__ = (
 DEFAULT_TIMEOUT = 300
 
 IS_WINDOWS = sys.platform == "win32"
-
-SDK_IMAGE = (
-    "ghcr.io/nanvix/nanvix-sdk-c-clang"
-    "@sha256:f61737cb0780e6a2058c6d0bdf8ae5562db18de437173b2bcbbe6973abd3689f"
-)
-
 
 def nanvixd_binary() -> str:
     """Return the nanvixd binary name for the current host platform."""

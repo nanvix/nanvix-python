@@ -34,8 +34,7 @@ git clone --recurse-submodules https://github.com/nanvix/nanvix-python.git
 cd nanvix-python
 
 # 2. Download the runtime and exact SDK-built CPython dependency
-./z setup --with-docker \
-  ghcr.io/nanvix/nanvix-sdk-c-clang@sha256:f61737cb0780e6a2058c6d0bdf8ae5562db18de437173b2bcbbe6973abd3689f
+./z setup
 
 # 3. Install packages and generate the bytecode-only ramfs
 ./z build
@@ -52,7 +51,7 @@ cd nanvix-python
 On Windows, use the PowerShell wrapper:
 
 ```powershell
-.\z.ps1 setup --with-docker ghcr.io/nanvix/nanvix-sdk-c-clang@sha256:f61737cb0780e6a2058c6d0bdf8ae5562db18de437173b2bcbbe6973abd3689f
+.\z.ps1 setup
 .\z.ps1 build
 .\z.ps1 test
 ```
