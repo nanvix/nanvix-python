@@ -145,8 +145,7 @@ git clone https://github.com/nanvix/nanvix-python.git
 cd nanvix-python
 
 # Download the runtime-only sysroot and SDK-built CPython.
-./z setup --with-docker \
-  ghcr.io/nanvix/nanvix-sdk-c-clang@sha256:f61737cb0780e6a2058c6d0bdf8ae5562db18de437173b2bcbbe6973abd3689f
+./z setup
 ./z build      # Install pip packages and generate ramfs image
 ./z test       # Run smoke test and functional tests
 ./z release    # Package standalone runtime bundle into dist/

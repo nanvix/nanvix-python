@@ -24,7 +24,7 @@ from nanvix_zutil.exitcodes import EXIT_BUILD_FAILURE, EXIT_MISSING_DEP
 from nanvix_zutil.helpers import InitRdArgs
 from nanvix_zutil.paths import nanvix_root, repo_root, test_out
 
-from .lib import SDK_IMAGE, LibMixin, mkramfs_binary, nanvixd_binary
+from .lib import LibMixin, mkramfs_binary, nanvixd_binary
 
 
 class BuildMixin(LibMixin):
@@ -417,12 +417,19 @@ class BuildMixin(LibMixin):
             tf.add(str(pylib), arcname=".")
         in_bytes = in_buf.getvalue()
 
+        sdk_image = self.manifest.toolchain.effective_build_ref
+        if sdk_image is None:
+            log.fatal(
+                "nanvix.toml does not define an SDK build image.",
+                code=EXIT_BUILD_FAILURE,
+            )
+
         cmd = [
             "docker",
             "run",
             "--rm",
             "-i",
-            SDK_IMAGE,
+            sdk_image,
             "sh",
             "-c",
             script,
