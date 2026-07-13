@@ -418,11 +418,6 @@ class BuildMixin(LibMixin):
         in_bytes = in_buf.getvalue()
 
         sdk_image = self.manifest.toolchain.effective_build_ref
-        if sdk_image is None:
-            log.fatal(
-                "nanvix.toml does not define an SDK build image.",
-                code=EXIT_BUILD_FAILURE,
-            )
 
         cmd = [
             "docker",
