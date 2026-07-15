@@ -648,7 +648,9 @@ class BuildMixin(LibMixin):
         platform_name = self.config.machine
         asset_prefix = self._asset_prefix()
         # Stage under <asset_prefix>/ so the archive extracts into that dir.
-        bundle_dir = paths.release_dir() / asset_prefix
+        # regular_out() is the staging root for the non-suffixed archive under
+        # zutils v0.17.0 magic-path packaging.
+        bundle_dir = paths.regular_out() / asset_prefix
 
         if not (sysroot / "bin" / nanvixd_name).is_file():
             log.fatal(
