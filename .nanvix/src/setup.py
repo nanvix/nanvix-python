@@ -29,13 +29,15 @@ class SetupMixin(LibMixin):
         interpreter binary and standard library into the runtime sysroot.
         """
         dependency = self._cpython_dependency()
-        # Include the extension so prefix matching cannot select either the
-        # similarly named -dev archive or the Windows delivery bundle
-        # (which contains a ready-made ramfs rather than an extractable stdlib).
         # Magic-path naming (zutils v0.17.0):
         #   {pkg}-{host}-{arch}-{machine}-{mode}-{mem}.{ext}
+        # Extension varies by host (windows -> .zip, linux -> .tar.gz);
+        # buildroot's artifact_pattern doesn't expose {ext}, so we
+        # inline it based on config.host. Pinning the extension also
+        # avoids matching the sibling '-dev' archive by prefix.
+        archive_ext = ".zip" if str(self.config.host) == "windows" else ".tar.gz"
         dependency.artifact_pattern = (
-            "{name}-{host}-{arch}-{machine}-{mode}-{mem}.tar.gz"
+            "{name}-{host}-{arch}-{machine}-{mode}-{mem}" + archive_ext
         )
         result = super().setup()
 
