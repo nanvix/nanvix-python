@@ -30,9 +30,13 @@ class SetupMixin(LibMixin):
         """
         dependency = self._cpython_dependency()
         # Include the extension so prefix matching cannot select either the
-        # similarly named buildroot archive or the Windows delivery bundle
+        # similarly named -dev archive or the Windows delivery bundle
         # (which contains a ready-made ramfs rather than an extractable stdlib).
-        dependency.artifact_pattern = "{name}-{machine}-{mode}-{mem}.tar.gz"
+        # Magic-path naming (zutils v0.17.0):
+        #   {pkg}-{host}-{arch}-{machine}-{mode}-{mem}.{ext}
+        dependency.artifact_pattern = (
+            "{name}-{host}-{arch}-{machine}-{mode}-{mem}.tar.gz"
+        )
         result = super().setup()
 
         sysroot = self._sysroot_path()
@@ -58,6 +62,8 @@ class SetupMixin(LibMixin):
         """Return the CPython runtime artifact downloaded by base setup."""
         prefix = dependency.artifact_pattern.format(
             name=dependency.name,
+            host=self.config.host,
+            arch=self.config.target,
             machine=self.config.machine,
             mode=self.config.deployment_mode,
             mem=self.config.memory_size,

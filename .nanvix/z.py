@@ -21,7 +21,7 @@ stage:
   - src/lib.py        shared helpers + cross-mixin forward declarations
   - src/setup.py      SetupMixin
   - src/build.py      BuildMixin (also owns site-packages + ramfs/initrd
-                      and stages the release bundle under release_dir())
+                      and stages the release bundle under regular_out())
   - src/test.py       TestMixin
   - src/benchmark.py  BenchmarkMixin
   - src/clean.py      CleanMixin

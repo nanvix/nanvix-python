@@ -156,19 +156,22 @@ class LibMixin(ZScript):
                     fh.write(f"\nTIMEOUT after {timeout}s\n")
 
     def _asset_prefix(self) -> str:
-        """Return the platform/mode/memory triple used for archive names."""
+        """Return the archive stem used both for the release archive filename
+        and as the wrapping subdir inside the archive.
+
+        Matches ``nanvix-zutil release``'s magic-path naming
+        (``{pkg}-{host}-{target}-{machine}-{mode}-{mem}``) so that
+        ``tar xf {archive}.tar.gz && cd {stem}`` lands the user inside
+        the extracted bundle.
+        """
         return (
-            f"{self.config.machine}-{self.config.deployment_mode}"
+            f"{self.manifest.name}"
+            f"-{self.config.host}"
+            f"-{self.config.target}"
+            f"-{self.config.machine}"
+            f"-{self.config.deployment_mode}"
             f"-{self.config.memory_size}"
         )
-
-    def release_targets(self) -> dict[str, str]:
-        """Name the release archive ``<asset_prefix>.tar.gz``.
-
-        ``release_dir()`` contains a single ``<asset_prefix>/`` subdir
-        staged by :meth:`BuildMixin._stage_release`; archive it as-is.
-        """
-        return {".": self._asset_prefix()}
 
     # ------------------------------------------------------------------
     # Forward declarations — concrete implementations live in BuildMixin.
