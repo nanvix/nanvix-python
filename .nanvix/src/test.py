@@ -230,9 +230,6 @@ class TestMixin(LibMixin):
         if not IS_WINDOWS:
             log.info("snapshot smoke test: skipped (Windows-only / WHP)")
             return
-        if self.config.deployment_mode != "standalone":
-            log.info("snapshot smoke test: skipped (standalone-only)")
-            return
         if not self._ramfs_img or not self._ramfs_img.is_file():
             log.fatal(
                 "ramfs image not found (required for snapshot smoke test).",
@@ -361,11 +358,6 @@ class TestMixin(LibMixin):
         test_start = int(os.environ.get("TEST_START", "1"))
         test_end = int(os.environ.get("TEST_END", "999"))
         excluded: set[str] = set(exclude_tests.split()) if exclude_tests else set()
-
-        # Standalone tests consume the bytecode-only ramfs produced by build.
-        # Other modes need an opt-0 cache beside the source tree.
-        if self.config.deployment_mode != "standalone":
-            self._precompile_pyc(sysroot, legacy=False, strip_sources=False)
 
         tmp = self._log_directory()
         total_pass = 0
