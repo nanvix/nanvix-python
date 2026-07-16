@@ -507,7 +507,6 @@ class BuildMixin(LibMixin):
             return self._initrd
 
         initrd: Path = make_initrd(
-            self,
             sysroot / "bin" / "python3.12",
             # Output goes to test_out() so the bundle's bin/ stays clean.
             test_out(),
