@@ -34,6 +34,20 @@ class BuildMixin(LibMixin):
     # Standalone / ramfs helpers
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _runtime_shared_libraries(lib_dir: Path) -> list[Path]:
+        """Return top-level runtime shared libraries from a sysroot lib directory."""
+        return [path for path in sorted(lib_dir.glob("*.so*")) if path.is_file()]
+
+    def _copy_runtime_shared_libraries(self, src_lib: Path, dst_lib: Path) -> list[str]:
+        """Copy shared libraries needed by dynamically loaded Python extensions."""
+        libraries = self._runtime_shared_libraries(src_lib)
+        if libraries:
+            dst_lib.mkdir(parents=True, exist_ok=True)
+        for library in libraries:
+            shutil.copy2(library, dst_lib / library.name)
+        return [library.name for library in libraries]
+
     def _ramfs_input_hash(self, sysroot: Path) -> str:
         """Compute a hash representing the current ramfs inputs."""
         h = hashlib.sha256()
@@ -42,6 +56,11 @@ class BuildMixin(LibMixin):
         cpython_sentinel = sysroot / ".cpython-installed"
         if cpython_sentinel.is_file():
             h.update(cpython_sentinel.read_bytes())
+
+        # Factor in runtime libraries loaded by shared Python extensions.
+        for library in self._runtime_shared_libraries(sysroot / "lib"):
+            h.update(library.name.encode())
+            h.update(library.read_bytes())
 
         # Factor in site-packages sentinel
         site_sentinel = (
@@ -216,6 +235,10 @@ class BuildMixin(LibMixin):
         log.info("creating stripped sysroot for standalone mode")
         if dst.exists():
             shutil.rmtree(dst)
+
+        # Shared Python extensions resolve SDK runtime dependencies from /lib,
+        # outside the /sysroot tree used as PYTHONHOME.
+        self._copy_runtime_shared_libraries(src / "lib", dst / "lib")
 
         root = dst / "sysroot"
         root.mkdir(parents=True)
@@ -684,10 +707,11 @@ class BuildMixin(LibMixin):
             # Copy rather than symlink: the archive packagers skip symlinks.
             shutil.copy2(python_target, python_link)
 
-        # Copy Python stdlib + site-packages
-        log.info("release: copying Python standard library and site-packages")
+        # Copy runtime shared libraries, Python stdlib, and site-packages
+        log.info("release: copying runtime libraries and Python packages")
         lib_dir = bundle_dir / "lib"
         lib_dir.mkdir()
+        self._copy_runtime_shared_libraries(sysroot / "lib", lib_dir)
         pylib = sysroot / "lib" / "python3.12"
         if pylib.is_dir():
             shutil.copytree(pylib, lib_dir / "python3.12")
@@ -779,13 +803,10 @@ class BuildMixin(LibMixin):
             f"bin/{nanvixd_name}",
             "bin/kernel.elf",
             "bin/python3.12",
+            "nanvix_rootfs.img",
+            "python3.initrd",
         ]
-        required.extend(
-            [
-                "nanvix_rootfs.img",
-                "python3.initrd",
-            ]
-        )
+
         missing = [f for f in required if not (bundle_dir / f).is_file()]
         if missing:
             log.fatal(

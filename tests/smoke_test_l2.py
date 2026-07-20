@@ -2,7 +2,8 @@
 
 Tests the modules that are compiled into cpython via Layer 1 libraries:
   zlib, bz2, _ssl/hashlib, _sqlite3, _ctypes, pyexpat, _elementtree
-Plus basic stdlib functionality: sys, os, json, collections, math, io.
+Plus the array extension and basic stdlib functionality:
+  sys, os, json, collections, math, io.
 """
 
 import sys
@@ -73,6 +74,16 @@ try:
     results.append(("io", "PASS"))
 except Exception as e:
     results.append(("io", f"FAIL: {e}"))
+
+# array (dynamically loaded on newer SDK builds)
+try:
+    import array
+
+    values = array.array("i", [1, 2, 3])
+    assert values.tolist() == [1, 2, 3]
+    results.append(("array", "PASS"))
+except Exception as e:
+    results.append(("array", f"FAIL: {e}"))
 
 # ── L1-enabled built-in modules ─────────────────────────────────────────────
 
