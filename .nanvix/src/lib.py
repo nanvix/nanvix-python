@@ -59,7 +59,6 @@ class LibMixin(ZScript):
         "bin/kernel.elf",
         "bin/mkramfs.exe",
     )
-    SYSROOT_MULTI_PROCESS_FILES: tuple[str, ...] = ()
 
     # Standalone / ramfs artefacts shared across build and test stages.
     _ramfs_img: Path | None = None

@@ -697,8 +697,6 @@ class BuildMixin(LibMixin):
         bin_dir = bundle_dir / "bin"
         bin_dir.mkdir()
         runtime_bins = [nanvixd_name, "kernel.elf", "python3.12"]
-        if mode == "multi-process":
-            runtime_bins.extend(["linuxd.elf", "uservm.elf"])
         for name in runtime_bins:
             src_file = sysroot / "bin" / name
             if src_file.is_file():
@@ -713,9 +711,7 @@ class BuildMixin(LibMixin):
         log.info("release: copying runtime libraries and Python packages")
         lib_dir = bundle_dir / "lib"
         lib_dir.mkdir()
-        runtime_libraries = self._copy_runtime_shared_libraries(
-            sysroot / "lib", lib_dir
-        )
+        self._copy_runtime_shared_libraries(sysroot / "lib", lib_dir)
         pylib = sysroot / "lib" / "python3.12"
         if pylib.is_dir():
             shutil.copytree(pylib, lib_dir / "python3.12")
@@ -740,80 +736,65 @@ class BuildMixin(LibMixin):
         )
 
         # Build and include ramfs image for standalone mode
-        if mode == "standalone":
-            mkramfs = sysroot / "bin" / mkramfs_binary()
-            if not mkramfs.is_file():
+        mkramfs = sysroot / "bin" / mkramfs_binary()
+        if not mkramfs.is_file():
+            log.fatal(
+                f"{mkramfs_binary()} not found (required for standalone mode).",
+                code=EXIT_MISSING_DEP,
+                hint="Run `./z setup` first.",
+            )
+        log.info("release: validating ramfs image")
+        try:
+            # Install _boot.py into sysroot and validate the ramfs
+            # (built earlier by ``./z build``; ``_ensure_ramfs``
+            # never rebuilds and hard-fails if missing/stale).
+            self._install_boot_script(sysroot)
+            self._ensure_ramfs(sysroot)
+            if self._ramfs_img and self._ramfs_img.is_file():
+                shutil.copy2(self._ramfs_img, bundle_dir / "nanvix_rootfs.img")
+            else:
                 log.fatal(
-                    f"{mkramfs_binary()} not found (required for standalone mode).",
-                    code=EXIT_MISSING_DEP,
-                    hint="Run `./z setup` first.",
+                    "ramfs image not found after build.",
+                    code=EXIT_BUILD_FAILURE,
+                    hint="Ensure `./z build` completed successfully.",
                 )
-            log.info("release: validating ramfs image")
-            try:
-                # Install _boot.py into sysroot and validate the ramfs
-                # (built earlier by ``./z build``; ``_ensure_ramfs``
-                # never rebuilds and hard-fails if missing/stale).
-                self._install_boot_script(sysroot)
-                self._ensure_ramfs(sysroot)
-                if self._ramfs_img and self._ramfs_img.is_file():
-                    shutil.copy2(self._ramfs_img, bundle_dir / "nanvix_rootfs.img")
-                else:
-                    log.fatal(
-                        "ramfs image not found after build.",
-                        code=EXIT_BUILD_FAILURE,
-                        hint="Ensure `./z build` completed successfully.",
-                    )
 
-                # Build multi-binary initrd with _boot.py as entry point
-                log.info("release: building python3.initrd")
-                initrd = self._ensure_initrd(sysroot)
-                shutil.copy2(initrd, bundle_dir / "python3.initrd")
+            # Build multi-binary initrd with _boot.py as entry point
+            log.info("release: building python3.initrd")
+            initrd = self._ensure_initrd(sysroot)
+            shutil.copy2(initrd, bundle_dir / "python3.initrd")
 
-                # Create mnt/ directory for user workloads
-                (bundle_dir / "mnt").mkdir(exist_ok=True)
+            # Create mnt/ directory for user workloads
+            (bundle_dir / "mnt").mkdir(exist_ok=True)
 
-            finally:
-                self._cleanup_ramfs()
-                self._cleanup_initrd()
+        finally:
+            self._cleanup_ramfs()
+            self._cleanup_initrd()
 
         # README
-        if mode == "standalone":
-            cold_cmd = (
-                f"./bin/{nanvixd_name} -ramfs nanvix_rootfs.img"
-                f" -mount ./mnt -- python3.initrd"
-            )
-            readme_text = (
-                f"# Nanvix Python Runtime\n\n"
-                f"Platform: {platform_name}\n"
-                f"Process mode: {mode}\n\n"
-                f"## Quick Start (cold boot)\n\n"
-                f"After extracting the archive, enter the directory and run:\n\n"
-                f"```sh\n"
-                f"cd {asset_prefix}\n"
-                f"{cold_cmd}\n"
-                f"```\n\n"
-                f"On startup CPython executes `/mnt/bootstrap.py` if present,\n"
-                f"otherwise it drops into an interactive REPL.\n\n"
-                f"## Running Your Own Script\n\n"
-                f"Place a `bootstrap.py` in a directory and mount it:\n\n"
-                f"```sh\n"
-                f"echo 'print(\"Hello from Nanvix!\")' > mnt/bootstrap.py\n"
-                f"{cold_cmd}\n"
-                f"```\n"
-            )
-        else:
-            run_cmd = f"./bin/{nanvixd_name} -- ./bin/python3.12"
-            readme_text = (
-                f"# Nanvix Python Runtime\n\n"
-                f"Platform: {platform_name}\n"
-                f"Process mode: {mode}\n\n"
-                f"## Quick Start\n\n"
-                f"After extracting the archive, enter the directory and run:\n\n"
-                f"```sh\n"
-                f"cd {asset_prefix}\n"
-                f"{run_cmd} script.py\n"
-                f"```\n"
-            )
+        cold_cmd = (
+            f"./bin/{nanvixd_name} -ramfs nanvix_rootfs.img"
+            f" -mount ./mnt -- python3.initrd"
+        )
+        readme_text = (
+            f"# Nanvix Python Runtime\n\n"
+            f"Platform: {platform_name}\n"
+            f"Process mode: {mode}\n\n"
+            f"## Quick Start (cold boot)\n\n"
+            f"After extracting the archive, enter the directory and run:\n\n"
+            f"```sh\n"
+            f"cd {asset_prefix}\n"
+            f"{cold_cmd}\n"
+            f"```\n\n"
+            f"On startup CPython executes `/mnt/bootstrap.py` if present,\n"
+            f"otherwise it drops into an interactive REPL.\n\n"
+            f"## Running Your Own Script\n\n"
+            f"Place a `bootstrap.py` in a directory and mount it:\n\n"
+            f"```sh\n"
+            f"echo 'print(\"Hello from Nanvix!\")' > mnt/bootstrap.py\n"
+            f"{cold_cmd}\n"
+            f"```\n"
+        )
         (bundle_dir / "README.md").write_text(readme_text)
 
         # Validate staged bundle
@@ -822,24 +803,10 @@ class BuildMixin(LibMixin):
             f"bin/{nanvixd_name}",
             "bin/kernel.elf",
             "bin/python3.12",
+            "nanvix_rootfs.img",
+            "python3.initrd",
         ]
-        required.extend(f"lib/{name}" for name in runtime_libraries)
-        if mode == "standalone":
-            required.extend(
-                [
-                    "nanvix_rootfs.img",
-                    "python3.initrd",
-                ]
-            )
-        else:
-            required.extend(
-                [
-                    "lib/python3.12/os.py",
-                    "lib/python3.12/site.py",
-                ]
-            )
-        if mode == "multi-process":
-            required.extend(["bin/linuxd.elf", "bin/uservm.elf"])
+
         missing = [f for f in required if not (bundle_dir / f).is_file()]
         if missing:
             log.fatal(
@@ -894,11 +861,10 @@ class BuildMixin(LibMixin):
         # reused without rebuilding (and without invoking Docker).
         self._stage_test_scripts(sysroot)
 
-        if self.config.deployment_mode == "standalone":
-            self._build_ramfs(sysroot)
+        self._build_ramfs(sysroot)
 
-            # Build the multi-binary initrd with _boot.py as entry point
-            self._ensure_initrd(sysroot)
+        # Build the multi-binary initrd with _boot.py as entry point
+        self._ensure_initrd(sysroot)
 
         self._stage_release()
 
