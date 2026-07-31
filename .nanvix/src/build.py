@@ -18,7 +18,7 @@ import sys
 import tarfile
 from pathlib import Path
 
-from nanvix_zutil import log, make_initrd
+from nanvix_zutil import DockerConfig, log, make_initrd
 from nanvix_zutil import paths
 from nanvix_zutil.exitcodes import EXIT_BUILD_FAILURE, EXIT_MISSING_DEP
 from nanvix_zutil.helpers import InitRdArgs
@@ -830,7 +830,7 @@ class BuildMixin(LibMixin):
     # Lifecycle entry point
     # ------------------------------------------------------------------
 
-    def build(self) -> None:
+    def build(self, docker: DockerConfig) -> None:
         """Install pure Python packages and generate ramfs from pre-built sysroot."""
         sysroot = self._sysroot_path()
 
