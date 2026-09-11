@@ -1,7 +1,7 @@
 [package]
 name = "nanvix-python"
 version = "3.12.3"
-nanvix-version = "0.24.21"
+nanvix-version = "0.24.24"
 
 [builds]
 [builds.matrix]
@@ -15,6 +15,6 @@ cpython = "3.12.3"
 [toolchain]
 kind = "nanvix-sdk"
 provider = "c-clang"
-sdk-version = "v0.24.21-sdk.1"
+sdk-version = "v0.24.24-sdk.1"
 sdk-image = "ghcr.io/nanvix/nanvix-sdk-c-clang"
-sdk-digest = "sha256:673042b187e0876d6ae82aafa514eb4e571412b6a56b830af9034b13a314d2d2"
+sdk-digest = "sha256:757495cf046e54219125f05978c7d0913027abbc4e2e0c24e06afc0e0c90b344"
